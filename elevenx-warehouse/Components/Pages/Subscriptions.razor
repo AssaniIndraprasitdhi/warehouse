@@ -4,7 +4,7 @@
 @inject CurrentUserAccessor CurrentUser
 @inject ToastService Toasts
 
-<PageTitle>Subscription • ElevenX</PageTitle>
+<PageTitle>Subscription • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
     <!-- Summary -->
@@ -14,22 +14,22 @@
         <StatCard Label="ใกล้ครบรอบใน 30 วัน" Value="@UpcomingCount.ToString()" IconName="clock" Color="warning" />
     </div>
 
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <!-- Toolbar card -->
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[10rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-56" placeholder="ค้นหา subscription..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหา subscription..." @bind="_search" @bind:event="oninput" />
             </div>
-            <select class="select" @bind="_statusFilter">
+            <select class="select sm:w-44" @bind="_statusFilter">
                 <option value="">ทุกสถานะ</option>
                 <option value="@SubscriptionStatus.Active">ใช้งานอยู่</option>
                 <option value="@SubscriptionStatus.Cancelled">ยกเลิกแล้ว</option>
                 <option value="@SubscriptionStatus.Expired">หมดอายุ</option>
             </select>
-        </div>
-        <div class="toolbar-actions">
-            <ExportButtons FileName="elevenx-subscriptions" TableFactory="BuildExport" />
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <ExportButtons FileName="elevenx-subscriptions" TableFactory="BuildExport" />
+            </div>
         </div>
     </div>
 
@@ -229,7 +229,7 @@
             BillingMath.MonthlyEquivalent(s.RecurringAmount ?? 0, s.BillingCycle ?? BillingCycle.Monthly).ToString("#,##0.##"),
             s.Status.HasValue ? DisplayLabels.Status(s.Status.Value) : "-",
         }).ToList();
-        return new ExportTable("รายการ Subscription ElevenX",
+        return new ExportTable("รายการ Subscription บ้านคลัง",
             ["รายการ", "ประเภท", "ค่ารอบ", "รอบบิล", "รอบถัดไป", "เทียบ/เดือน", "สถานะ"], rows,
             $"รวมต่อเดือน {SubscriptionService.MonthlyTotal(_subs):#,##0.##} ฿");
     }

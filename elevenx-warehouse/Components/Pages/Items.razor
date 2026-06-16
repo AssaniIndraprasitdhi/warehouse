@@ -4,37 +4,37 @@
 @inject ILicenseService LicenseService
 @inject ToastService Toasts
 
-<PageTitle>รายการสินค้า • ElevenX</PageTitle>
+<PageTitle>รายการสินค้า • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <!-- Toolbar card: ค้นหา + ตัวกรอง + ปุ่ม (บรรทัดเดียว) -->
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[12rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-64" placeholder="ค้นหาชื่อ / SKU..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหาชื่อ / SKU..." @bind="_search" @bind:event="oninput" />
             </div>
-            <select class="select" @bind="_typeFilter">
+            <select class="select sm:w-44" @bind="_typeFilter">
                 <option value="">ทุกประเภท</option>
                 <option value="@ItemType.IotMaterial">วัสดุ IoT</option>
                 <option value="@ItemType.Server">Server</option>
                 <option value="@ItemType.Software">Software</option>
                 <option value="@ItemType.Other">อื่น ๆ</option>
             </select>
-            <select class="select" @bind="_categoryFilter">
+            <select class="select sm:w-52" @bind="_categoryFilter">
                 <option value="">ทุกหมวดหมู่</option>
                 @foreach (var c in _categories)
                 {
                     <option value="@c.Id">@c.Name</option>
                 }
             </select>
-        </div>
-        <div class="toolbar-actions">
-            <ExportButtons FileName="elevenx-items" TableFactory="BuildExport" />
-            @if (_canManage)
-            {
-                <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="plus" Class="w-4 h-4" /> เพิ่มรายการ</button>
-            }
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <ExportButtons FileName="elevenx-items" TableFactory="BuildExport" />
+                @if (_canManage)
+                {
+                    <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="plus" Class="w-4 h-4" /> เพิ่มรายการ</button>
+                }
+            </div>
         </div>
     </div>
 
@@ -496,7 +496,7 @@
             i.Type == ItemType.IotMaterial ? $"{i.Quantity} {i.Unit}" : (i.TotalSeats.HasValue ? $"{_usedSeats.GetValueOrDefault(i.Id)}/{i.TotalSeats}" : "-"),
             i.CostType == CostType.Recurring ? $"{i.RecurringAmount:#,##0} ({(i.BillingCycle.HasValue ? DisplayLabels.Cycle(i.BillingCycle.Value) : "")})" : "จ่ายครั้งเดียว",
         }).ToList();
-        return new ExportTable("รายการสินค้า ElevenX", ["ชื่อ", "SKU", "ประเภท", "หมวดหมู่", "สต็อก/Seat", "ค่าใช้จ่าย"], rows,
+        return new ExportTable("รายการสินค้า บ้านคลัง", ["ชื่อ", "SKU", "ประเภท", "หมวดหมู่", "สต็อก/Seat", "ค่าใช้จ่าย"], rows,
             $"จำนวน {rows.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
     }
 }

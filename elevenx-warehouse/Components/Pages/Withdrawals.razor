@@ -4,26 +4,26 @@
 @inject CurrentUserAccessor CurrentUser
 @inject ToastService Toasts
 
-<PageTitle>การเบิกของ • ElevenX</PageTitle>
+<PageTitle>การเบิกของ • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <!-- Toolbar card -->
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[10rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-56" placeholder="ค้นหารายการ / วัตถุประสงค์..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหารายการ / วัตถุประสงค์..." @bind="_search" @bind:event="oninput" />
             </div>
-            <input type="date" class="input" @bind="_from" />
+            <input type="date" class="input sm:w-40" @bind="_from" />
             <span class="text-muted text-sm">ถึง</span>
-            <input type="date" class="input" @bind="_to" />
-        </div>
-        <div class="toolbar-actions">
-            <ExportButtons FileName="elevenx-withdrawals" TableFactory="BuildExport" />
-            @if (_canWithdraw)
-            {
-                <button class="btn btn-primary" @onclick="OpenForm"><Icon Name="withdraw" Class="w-4 h-4" /> บันทึกการเบิก</button>
-            }
+            <input type="date" class="input sm:w-40" @bind="_to" />
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <ExportButtons FileName="elevenx-withdrawals" TableFactory="BuildExport" />
+                @if (_canWithdraw)
+                {
+                    <button class="btn btn-primary" @onclick="OpenForm"><Icon Name="withdraw" Class="w-4 h-4" /> บันทึกการเบิก</button>
+                }
+            </div>
         </div>
     </div>
 
@@ -244,7 +244,7 @@
             DisplayName(w.WithdrawnBy),
             w.Note ?? "-",
         }).ToList();
-        return new ExportTable("รายงานการเบิกของ ElevenX",
+        return new ExportTable("รายงานการเบิกของ บ้านคลัง",
             ["วันที่", "รายการ", "จำนวน", "วัตถุประสงค์", "ผู้เบิก", "หมายเหตุ"], rows,
             $"{Filtered.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
     }

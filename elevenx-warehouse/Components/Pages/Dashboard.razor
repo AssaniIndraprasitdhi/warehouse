@@ -2,7 +2,7 @@
 @attribute [Authorize]
 @inject IDashboardService DashboardService
 
-<PageTitle>แดชบอร์ด • ElevenX</PageTitle>
+<PageTitle>แดชบอร์ด • บ้านคลัง</PageTitle>
 
 @if (_loading || _summary is null)
 {
@@ -30,19 +30,19 @@ else
 
         <!-- Alert row -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <a href="/items" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+            <a href="/items" class="card card-pad flex items-center gap-3 border-l-[3px] border-l-danger hover:bg-surface-2/40 transition-colors">
                 <span class="stat-icon @UiColors.SoftBg("danger")"><Icon Name="warning" /></span>
                 <div><div class="stat-value text-xl">@_summary.LowStockCount</div><div class="stat-label">สต็อกต่ำ</div></div>
             </a>
-            <a href="/licenses" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+            <a href="/licenses" class="card card-pad flex items-center gap-3 border-l-[3px] border-l-warning hover:bg-surface-2/40 transition-colors">
                 <span class="stat-icon @UiColors.SoftBg("warning")"><Icon Name="seat" /></span>
                 <div><div class="stat-value text-xl">@_summary.SeatsNearFullCount</div><div class="stat-label">Seat ใกล้เต็ม</div></div>
             </a>
-            <a href="/subscriptions" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+            <a href="/subscriptions" class="card card-pad flex items-center gap-3 border-l-[3px] border-l-info hover:bg-surface-2/40 transition-colors">
                 <span class="stat-icon @UiColors.SoftBg("info")"><Icon Name="clock" /></span>
                 <div><div class="stat-value text-xl">@_summary.UpcomingRenewals.Count</div><div class="stat-label">ใกล้ครบรอบ (30 วัน)</div></div>
             </a>
-            <a href="/subscriptions" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+            <a href="/subscriptions" class="card card-pad flex items-center gap-3 border-l-[3px] border-l-purple hover:bg-surface-2/40 transition-colors">
                 <span class="stat-icon @UiColors.SoftBg("purple")"><Icon Name="refresh" /></span>
                 <div><div class="stat-value text-xl">@_summary.ActiveSubscriptions</div><div class="stat-label">Subscription ใช้งาน</div></div>
             </a>

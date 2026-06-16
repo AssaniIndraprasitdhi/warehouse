@@ -57,6 +57,18 @@ public static class UiColors
         _ => "text-muted",
     };
 
+    // แถบสี accent บาง ๆ ด้านซ้ายของการ์ด (การ์ดยังขาวสะอาด มีสีแค่เป็น accent)
+    public static string CardTint(string color) => color switch
+    {
+        "success" => "border-l-[3px] border-l-success",
+        "warning" => "border-l-[3px] border-l-warning",
+        "info" => "border-l-[3px] border-l-info",
+        "purple" => "border-l-[3px] border-l-purple",
+        "danger" => "border-l-[3px] border-l-danger",
+        "accent" => "border-l-[3px] border-l-accent",
+        _ => "border-l-[3px] border-l-neutral",
+    };
+
     // ===== แม็พประเภท item / สถานะ → สี =====
     public static string ItemTypeColor(Data.ItemType t) => t switch
     {

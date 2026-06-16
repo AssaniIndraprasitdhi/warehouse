@@ -6,7 +6,7 @@
 @inject CurrentUserAccessor CurrentUser
 @inject ToastService Toasts
 
-<PageTitle>ค่าใช้จ่าย / การซื้อ • ElevenX</PageTitle>
+<PageTitle>ค่าใช้จ่าย / การซื้อ • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
     <!-- Summary -->
@@ -16,35 +16,35 @@
         <StatCard Label="ค่ารอบ Subscription" Value="@FormatMoney(Filtered.Where(p => p.IsRecurringCharge).Sum(p => p.TotalCost))" IconName="refresh" Color="purple" />
     </div>
 
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <!-- Toolbar card -->
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[10rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-56" placeholder="ค้นหารายการ..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหารายการ..." @bind="_search" @bind:event="oninput" />
             </div>
-            <input type="date" class="input" @bind="_from" />
+            <input type="date" class="input sm:w-40" @bind="_from" />
             <span class="text-muted text-sm">ถึง</span>
-            <input type="date" class="input" @bind="_to" />
-            <select class="select" @bind="_typeFilter">
+            <input type="date" class="input sm:w-40" @bind="_to" />
+            <select class="select sm:w-40" @bind="_typeFilter">
                 <option value="">ทุกประเภท</option>
                 <option value="@ItemType.IotMaterial">วัสดุ IoT</option>
                 <option value="@ItemType.Server">Server</option>
                 <option value="@ItemType.Software">Software</option>
             </select>
-            <select class="select" @bind="_kindFilter">
+            <select class="select sm:w-40" @bind="_kindFilter">
                 <option value="">ทั้งหมด</option>
                 <option value="onetime">ซื้อครั้งเดียว</option>
                 <option value="recurring">ค่ารอบ</option>
             </select>
-        </div>
-        <div class="toolbar-actions">
-            <ExportButtons FileName="elevenx-purchases" TableFactory="BuildExport" />
-            @if (_canManage)
-            {
-                <button class="btn btn-secondary" @onclick="OpenRecurring"><Icon Name="refresh" Class="w-4 h-4" /> บันทึกค่ารอบ</button>
-                <button class="btn btn-primary" @onclick="OpenPurchase"><Icon Name="plus" Class="w-4 h-4" /> บันทึกการซื้อ</button>
-            }
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <ExportButtons FileName="elevenx-purchases" TableFactory="BuildExport" />
+                @if (_canManage)
+                {
+                    <button class="btn btn-secondary" @onclick="OpenRecurring"><Icon Name="refresh" Class="w-4 h-4" /> บันทึกค่ารอบ</button>
+                    <button class="btn btn-primary" @onclick="OpenPurchase"><Icon Name="plus" Class="w-4 h-4" /> บันทึกการซื้อ</button>
+                }
+            </div>
         </div>
     </div>
 
@@ -397,7 +397,7 @@
             p.Supplier?.Name ?? "-",
             DisplayName(p.PurchasedBy),
         }).ToList();
-        return new ExportTable("ค่าใช้จ่าย / การซื้อ ElevenX",
+        return new ExportTable("ค่าใช้จ่าย / การซื้อ บ้านคลัง",
             ["วันที่", "รายการ", "ประเภท", "ชนิด", "จำนวน", "ราคา/หน่วย", "รวม", "ผู้ขาย", "ผู้บันทึก"], rows,
             $"รวม {Filtered.Sum(p => p.TotalCost):#,##0.##} ฿ • {Filtered.Count} รายการ");
     }

@@ -10,6 +10,9 @@
         <button class="icon-btn lg:hidden" @onclick="OnToggle" title="เปิดเมนู">
             <Icon Name="menu" />
         </button>
+        <button class="icon-btn hidden lg:grid" @onclick="OnCollapse" title="ย่อ/ขยายเมนู">
+            <Icon Name="menu" />
+        </button>
         <div class="min-w-0">
             <div class="page-title truncate">@_title</div>
             <div class="breadcrumb">
@@ -105,6 +108,7 @@
 
 @code {
     [Parameter] public EventCallback OnToggle { get; set; }
+    [Parameter] public EventCallback OnCollapse { get; set; }
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private string _title = "แดชบอร์ด";
@@ -172,7 +176,7 @@
     private void UpdateTitle()
     {
         var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
-        _title = Titles.FirstOrDefault(t => path.StartsWith(t.Key)).Value ?? "ElevenX";
+        _title = Titles.FirstOrDefault(t => path.StartsWith(t.Key)).Value ?? "บ้านคลัง";
     }
 
     private void ToggleNotif() { _showNotif = !_showNotif; _showProfile = false; }

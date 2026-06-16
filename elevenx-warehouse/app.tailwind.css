@@ -82,12 +82,20 @@
   .sidebar {
     @apply fixed inset-y-0 left-0 z-50 w-60 max-w-[82vw] bg-surface border-r border-border flex flex-col;
     transform: translateX(-100%);
-    transition: transform .28s cubic-bezier(.16,.84,.44,1);
+    transition: transform .28s cubic-bezier(.16,.84,.44,1), width .2s ease;
   }
   .sidebar.is-open { transform: translateX(0); box-shadow: 0 24px 60px -24px rgba(0,0,0,.45); }
   .sidebar-backdrop { @apply fixed inset-0 z-40 bg-black/40 lg:hidden; }
   @media (min-width: 1024px) {
     .sidebar { position: static; transform: none; width: 15rem; max-width: none; z-index: auto; box-shadow: none; }
+    /* ย่อ/หุบ: เหลือไอคอนล้วน (เฉพาะเดสก์ท็อป) */
+    .sidebar.is-collapsed { width: 4.25rem; }
+    .sidebar.is-collapsed .brand-text,
+    .sidebar.is-collapsed .nav-label,
+    .sidebar.is-collapsed .status-text { display: none; }
+    .sidebar.is-collapsed .brand-row,
+    .sidebar.is-collapsed .nav-item,
+    .sidebar.is-collapsed .status-row { justify-content: center; padding-left: 0; padding-right: 0; }
   }
   .nav-item {
     @apply flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-muted text-sm font-normal

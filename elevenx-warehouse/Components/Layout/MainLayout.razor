@@ -3,13 +3,13 @@
 @inject NavigationManager Nav
 
 <div class="app-shell">
-    <Sidebar Open="_navOpen" />
+    <Sidebar Open="_navOpen" Collapsed="_collapsed" />
     @if (_navOpen)
     {
         <div class="sidebar-backdrop" @onclick="CloseNav"></div>
     }
     <div class="app-main">
-        <TopBar OnToggle="ToggleNav" />
+        <TopBar OnToggle="ToggleNav" OnCollapse="ToggleCollapse" />
         <main class="app-content">
             @Body
         </main>
@@ -26,11 +26,13 @@
 
 @code {
     private bool _navOpen;
+    private bool _collapsed;   // ย่อ/หุบ sidebar บนเดสก์ท็อป
 
     protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
 
     private void ToggleNav() => _navOpen = !_navOpen;
     private void CloseNav() => _navOpen = false;
+    private void ToggleCollapse() => _collapsed = !_collapsed;
 
     // ปิด drawer อัตโนมัติเมื่อเปลี่ยนหน้า (เช่น แตะเมนูบนมือถือ)
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)

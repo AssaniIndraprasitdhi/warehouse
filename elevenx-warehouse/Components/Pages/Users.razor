@@ -3,25 +3,25 @@
 @inject IUserService UserService
 @inject ToastService Toasts
 
-<PageTitle>จัดการผู้ใช้งาน • ElevenX</PageTitle>
+<PageTitle>จัดการผู้ใช้งาน • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[10rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-56" placeholder="ค้นหาชื่อ / อีเมล..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหาชื่อ / อีเมล..." @bind="_search" @bind:event="oninput" />
             </div>
-            <select class="select" @bind="_roleFilter">
+            <select class="select sm:w-44" @bind="_roleFilter">
                 <option value="">ทุก Role</option>
                 @foreach (var r in AppRoles.All)
                 {
                     <option value="@r">@AppRoles.DisplayName(r)</option>
                 }
             </select>
-        </div>
-        <div class="toolbar-actions">
-            <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="user-plus" Class="w-4 h-4" /> เพิ่มผู้ใช้</button>
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="user-plus" Class="w-4 h-4" /> เพิ่มผู้ใช้</button>
+            </div>
         </div>
     </div>
 

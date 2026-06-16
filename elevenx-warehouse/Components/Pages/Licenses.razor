@@ -5,7 +5,7 @@
 @inject CurrentUserAccessor CurrentUser
 @inject ToastService Toasts
 
-<PageTitle>License / Seat • ElevenX</PageTitle>
+<PageTitle>License / Seat • บ้านคลัง</PageTitle>
 
 <div class="space-y-5">
     <!-- Seat usage cards -->
@@ -41,32 +41,32 @@
         </div>
     }
 
-    <!-- Toolbar -->
-    <div class="toolbar">
-        <div class="toolbar-filters">
-            <div class="relative">
+    <!-- Toolbar card -->
+    <div class="card card-pad">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[10rem]">
                 <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input class="input pl-9 w-56" placeholder="ค้นหารายการ / ผู้ใช้..." @bind="_search" @bind:event="oninput" />
+                <input class="input pl-9 w-full" placeholder="ค้นหารายการ / ผู้ใช้..." @bind="_search" @bind:event="oninput" />
             </div>
-            <select class="select" @bind="_itemFilter">
+            <select class="select sm:w-48" @bind="_itemFilter">
                 <option value="0">ทุกรายการ</option>
                 @foreach (var s in _usage)
                 {
                     <option value="@s.ItemId">@s.Name</option>
                 }
             </select>
-            <select class="select" @bind="_statusFilter">
+            <select class="select sm:w-40" @bind="_statusFilter">
                 <option value="">ทั้งหมด</option>
                 <option value="active">ใช้งานอยู่</option>
                 <option value="released">คืนแล้ว</option>
             </select>
-        </div>
-        <div class="toolbar-actions">
-            <ExportButtons FileName="elevenx-licenses" TableFactory="BuildExport" />
-            @if (_canManage)
-            {
-                <button class="btn btn-primary" @onclick="OpenAssign"><Icon Name="key" Class="w-4 h-4" /> จ่าย Seat</button>
-            }
+            <div class="flex items-center gap-2 sm:ml-auto">
+                <ExportButtons FileName="elevenx-licenses" TableFactory="BuildExport" />
+                @if (_canManage)
+                {
+                    <button class="btn btn-primary" @onclick="OpenAssign"><Icon Name="key" Class="w-4 h-4" /> จ่าย Seat</button>
+                }
+            </div>
         </div>
     </div>
 
@@ -298,7 +298,7 @@
             l.AssignedAt.ToString("dd/MM/yyyy"),
             l.ReleasedAt?.ToString("dd/MM/yyyy") ?? "-",
         }).ToList();
-        return new ExportTable("รายงาน License / Seat ElevenX",
+        return new ExportTable("รายงาน License / Seat บ้านคลัง",
             ["รายการ", "ประเภท", "ผู้ใช้", "อีเมล", "สถานะ", "วันที่จ่าย", "วันที่คืน"], rows,
             $"{Filtered.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
     }

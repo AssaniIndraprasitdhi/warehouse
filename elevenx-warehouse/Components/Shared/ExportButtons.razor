@@ -1,10 +1,10 @@
 @inject IExportService Export
 @inject IJSRuntime JS
 
-<button class="btn btn-secondary btn-sm" @onclick="DoExcel" disabled="@_busy" title="ส่งออก Excel">
+<button class="btn btn-secondary" @onclick="DoExcel" disabled="@_busy" title="ส่งออก Excel">
     <Icon Name="excel" Class="w-4 h-4 text-green-700" /> Excel
 </button>
-<button class="btn btn-secondary btn-sm" @onclick="DoPdf" disabled="@_busy" title="ส่งออก PDF">
+<button class="btn btn-secondary" @onclick="DoPdf" disabled="@_busy" title="ส่งออก PDF">
     <Icon Name="pdf" Class="w-4 h-4 text-danger" /> PDF
 </button>
 
