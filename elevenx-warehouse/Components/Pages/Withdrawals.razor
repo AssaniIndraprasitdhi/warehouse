@@ -1,0 +1,251 @@
+@page "/withdrawals"
+@attribute [Authorize]
+@inject IWithdrawalService WithdrawalService
+@inject CurrentUserAccessor CurrentUser
+@inject ToastService Toasts
+
+<PageTitle>การเบิกของ • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-56" placeholder="ค้นหารายการ / วัตถุประสงค์..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <input type="date" class="input" @bind="_from" />
+            <span class="text-muted text-sm">ถึง</span>
+            <input type="date" class="input" @bind="_to" />
+        </div>
+        <div class="toolbar-actions">
+            <ExportButtons FileName="elevenx-withdrawals" TableFactory="BuildExport" />
+            @if (_canWithdraw)
+            {
+                <button class="btn btn-primary" @onclick="OpenForm"><Icon Name="withdraw" Class="w-4 h-4" /> บันทึกการเบิก</button>
+            }
+        </div>
+    </div>
+
+    <div class="legend">
+        <Icon Name="help" Class="w-4 h-4" />
+        <span>เบิกได้เฉพาะ <span class="text-info">วัสดุ IoT</span> เท่านั้น • ระบบจะตัดสต็อกอัตโนมัติและเตือนหากคงเหลือไม่พอ</span>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ยังไม่มีรายการเบิก</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>วันที่</th>
+                            <th>รายการ</th>
+                            <th class="text-right">จำนวน</th>
+                            <th>วัตถุประสงค์</th>
+                            <th>ผู้เบิก</th>
+                            <th>หมายเหตุ</th>
+                            @if (_canManage)
+                            {
+                                <th></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var w in Filtered)
+                        {
+                            <tr>
+                                <td class="whitespace-nowrap">@w.WithdrawnAt.ToString("dd/MM/yyyy")</td>
+                                <td class="text-text">@w.Item.Name</td>
+                                <td class="text-right font-medium">@w.Quantity <span class="text-xs text-muted">@w.Item.Unit</span></td>
+                                <td class="text-muted">@(w.Purpose ?? "—")</td>
+                                <td class="text-muted">@DisplayName(w.WithdrawnBy)</td>
+                                <td class="text-muted">@(w.Note ?? "—")</td>
+                                @if (_canManage)
+                                {
+                                    <td class="text-right">
+                                        <button class="icon-btn hover:text-danger" title="ลบ (คืนสต็อก)" @onclick="() => AskDelete(w)"><Icon Name="trash" Class="w-4 h-4" /></button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    <div class="text-xs text-muted">ทั้งหมด @Filtered.Count รายการ • รวมเบิก @Filtered.Sum(w => w.Quantity) หน่วย</div>
+</div>
+
+<!-- Withdraw modal -->
+<Modal Show="_showForm" Title="บันทึกการเบิกของ" Size="md" OnClose="() => _showForm = false">
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(_formError))
+    {
+        <div class="mb-4"><AlertBanner Type="danger" Message="@_formError" /></div>
+    }
+    <div class="space-y-4">
+        <div>
+            <label class="form-label">รายการ (วัสดุ IoT) *</label>
+            <select class="select" @bind="_itemId">
+                <option value="0" disabled>เลือกวัสดุ</option>
+                @foreach (var i in _items)
+                {
+                    <option value="@i.Id">@i.Name (คงเหลือ @i.Quantity @i.Unit)</option>
+                }
+            </select>
+            @if (Selected is not null)
+            {
+                <div class="field-hint @(Selected.Quantity <= Selected.MinQuantity ? "text-danger" : "")">
+                    คงเหลือ @Selected.Quantity @Selected.Unit @(Selected.Quantity <= Selected.MinQuantity ? "(สต็อกต่ำ!)" : "")
+                </div>
+            }
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">จำนวนที่เบิก *</label>
+                <input type="number" min="1" max="@(Selected?.Quantity ?? 0)" class="input" @bind="_qty" />
+            </div>
+            <div>
+                <label class="form-label">วันที่</label>
+                <input type="date" class="input" @bind="_date" />
+            </div>
+        </div>
+        <div>
+            <label class="form-label">วัตถุประสงค์</label>
+            <input class="input" @bind="_purpose" placeholder="เช่น ติดตั้งโปรเจกต์ Smart Farm" />
+        </div>
+        <div>
+            <label class="form-label">หมายเหตุ</label>
+            <input class="input" @bind="_note" />
+        </div>
+    </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showForm = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            บันทึกการเบิก
+        </button>
+    </Footer>
+</Modal>
+
+<ConfirmDialog Show="_confirmDelete" Danger="true" Busy="_deleting"
+               Title="ลบรายการเบิก"
+               Message="ต้องการลบรายการเบิกนี้ใช่หรือไม่? สต็อกจะถูกคืนกลับ"
+               ConfirmText="ลบ" OnConfirm="DoDelete" OnCancel="() => _confirmDelete = false" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Withdrawal> _all = [];
+    private List<Item> _items = [];
+    private bool _loading = true, _canWithdraw, _canManage;
+
+    private string _search = "";
+    private DateTime? _from, _to;
+
+    private bool _showForm, _saving;
+    private string? _formError;
+    private int _itemId, _qty = 1;
+    private DateTime _date = DateTime.Today;
+    private string? _purpose, _note;
+
+    private bool _confirmDelete, _deleting;
+    private Withdrawal? _deleteTarget;
+
+    private Item? Selected => _items.FirstOrDefault(i => i.Id == _itemId);
+
+    private IReadOnlyList<Withdrawal> Filtered => _all.Where(w =>
+        (_from is null || w.WithdrawnAt.Date >= _from) &&
+        (_to is null || w.WithdrawnAt.Date <= _to) &&
+        (string.IsNullOrWhiteSpace(_search)
+            || w.Item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || (w.Purpose ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var u = (await AuthState).User;
+            _canManage = u.IsInRole(AppRoles.Admin) || u.IsInRole(AppRoles.Purchaser);
+            _canWithdraw = _canManage || u.IsInRole(AppRoles.Staff);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _all = await WithdrawalService.GetWithdrawalsAsync();
+        _items = await WithdrawalService.GetWithdrawableItemsAsync();
+        _loading = false;
+    }
+
+    private void OpenForm()
+    {
+        if (!_canWithdraw) return;
+        _formError = null;
+        _itemId = 0; _qty = 1; _date = DateTime.Today; _purpose = null; _note = null;
+        _showForm = true;
+    }
+
+    private async Task Save()
+    {
+        if (!_canWithdraw) return;
+        _formError = null;
+        if (_itemId <= 0) { _formError = "กรุณาเลือกวัสดุ"; return; }
+
+        _saving = true;
+        var uid = await CurrentUser.GetUserIdAsync() ?? "";
+        var r = await WithdrawalService.RecordWithdrawalAsync(_itemId, _qty, uid, _purpose, _date, _note);
+        _saving = false;
+
+        if (r.Success) { _showForm = false; await LoadAsync(); Toasts.Success("บันทึกการเบิกของแล้ว"); }
+        else _formError = r.Error;
+    }
+
+    private void AskDelete(Withdrawal w) { if (!_canManage) return; _deleteTarget = w; _confirmDelete = true; }
+
+    private async Task DoDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        var r = await WithdrawalService.DeleteAsync(_deleteTarget.Id);
+        _deleting = false;
+        _confirmDelete = false;
+        if (r.Success) { await LoadAsync(); Toasts.Success("ลบรายการเบิกแล้ว"); }
+        else Toasts.Error(r.Error ?? "ลบไม่สำเร็จ");
+    }
+
+    private static string DisplayName(ApplicationUser u) => string.IsNullOrWhiteSpace(u.FullName) ? (u.Email ?? "-") : u.FullName;
+
+    private ExportTable BuildExport()
+    {
+        var rows = Filtered.Select(w => new[]
+        {
+            w.WithdrawnAt.ToString("dd/MM/yyyy"),
+            w.Item.Name,
+            $"{w.Quantity} {w.Item.Unit}",
+            w.Purpose ?? "-",
+            DisplayName(w.WithdrawnBy),
+            w.Note ?? "-",
+        }).ToList();
+        return new ExportTable("รายงานการเบิกของ ElevenX",
+            ["วันที่", "รายการ", "จำนวน", "วัตถุประสงค์", "ผู้เบิก", "หมายเหตุ"], rows,
+            $"{Filtered.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
+    }
+}

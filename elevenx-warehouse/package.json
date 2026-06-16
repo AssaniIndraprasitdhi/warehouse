@@ -1,0 +1,14 @@
+{
+  "name": "elevenx-warehouse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ElevenX Stock & Cost — Tailwind CSS build",
+  "scripts": {
+    "build:css": "tailwindcss -i ./app.tailwind.css -o ./wwwroot/app.css --minify",
+    "watch:css": "tailwindcss -i ./app.tailwind.css -o ./wwwroot/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.13",
+    "tailwindcss": "^4.1.13"
+  }
+}

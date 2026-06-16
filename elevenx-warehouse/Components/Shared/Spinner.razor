@@ -1,0 +1,13 @@
+<div class="flex flex-col items-center justify-center gap-3 @(FullHeight ? "py-20" : "py-10") text-muted">
+    <span class="spinner @(Large ? "spinner-lg" : "")"></span>
+    @if (!string.IsNullOrEmpty(Text))
+    {
+        <span class="text-sm">@Text</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Text { get; set; } = "กำลังโหลดข้อมูล...";
+    [Parameter] public bool Large { get; set; } = true;
+    [Parameter] public bool FullHeight { get; set; }
+}

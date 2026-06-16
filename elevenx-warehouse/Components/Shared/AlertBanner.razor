@@ -1,0 +1,41 @@
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="flex items-start gap-2.5 rounded-lg px-4 py-3 text-sm border @BorderClass @UiColors.SoftBg(Color)">
+        <Icon Name="@IconName" Class="w-4 h-4 mt-0.5 shrink-0" />
+        <span class="flex-1 text-text">@Message</span>
+        @if (OnClose.HasDelegate)
+        {
+            <button class="opacity-70 hover:opacity-100" @onclick="OnClose"><Icon Name="x" Class="w-4 h-4" /></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string Type { get; set; } = "info"; // success | danger | warning | info
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string Color => Type switch
+    {
+        "success" => "success",
+        "danger" => "danger",
+        "warning" => "warning",
+        _ => "info",
+    };
+
+    private string IconName => Type switch
+    {
+        "success" => "check",
+        "danger" => "warning",
+        "warning" => "warning",
+        _ => "help",
+    };
+
+    private string BorderClass => Type switch
+    {
+        "success" => "border-success/30",
+        "danger" => "border-danger/30",
+        "warning" => "border-warning/30",
+        _ => "border-info/30",
+    };
+}

@@ -1,0 +1,40 @@
+@if (Show)
+{
+    <div class="modal-backdrop" @onclick="Close"></div>
+    <div class="modal-panel" @onclick="Close">
+        <div class="card w-full @SizeClass max-h-[90vh] flex flex-col" @onclick:stopPropagation="true">
+            <div class="card-header shrink-0">
+                <span class="card-title">@Title</span>
+                <button class="icon-btn" @onclick="Close" title="ปิด"><Icon Name="x" Class="w-4 h-4" /></button>
+            </div>
+            <div class="p-5 overflow-y-auto">
+                @ChildContent
+            </div>
+            @if (Footer is not null)
+            {
+                <div class="px-5 py-4 border-t border-border flex flex-wrap justify-end gap-2 shrink-0">
+                    @Footer
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Size { get; set; } = "md"; // sm | md | lg | xl
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private string SizeClass => Size switch
+    {
+        "sm" => "max-w-md",
+        "lg" => "max-w-3xl",
+        "xl" => "max-w-5xl",
+        _ => "max-w-xl",
+    };
+
+    private Task Close() => OnClose.InvokeAsync();
+}

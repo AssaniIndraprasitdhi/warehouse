@@ -1,0 +1,67 @@
+@inject NavigationManager Nav
+
+<aside class="sidebar @(Open ? "is-open" : "")">
+    <!-- Brand: ไอคอน + ชื่อระบบ -->
+    <div class="h-14 flex items-center gap-2.5 px-4 border-b border-border shrink-0">
+        <span class="w-8 h-8 rounded-lg bg-accent grid place-items-center text-white shrink-0">
+            <Icon Name="box" Class="w-[18px] h-[18px]" />
+        </span>
+        <span class="text-text font-semibold text-base leading-none truncate">ElevenX</span>
+    </div>
+
+    <!-- Nav: ไอคอน + path -->
+    <nav class="flex-1 overflow-y-auto px-2.5 py-3 flex flex-col gap-1">
+        @foreach (var link in Links)
+        {
+            if (link.Roles is null)
+            {
+                @RenderLink(link)
+            }
+            else
+            {
+                <AuthorizeView Roles="@link.Roles" Context="auth">
+                    <Authorized>@RenderLink(link)</Authorized>
+                </AuthorizeView>
+            }
+        }
+    </nav>
+
+    <!-- System status -->
+    <div class="p-3 border-t border-border shrink-0">
+        <div class="flex items-center gap-2.5 rounded-lg bg-surface-2/50 px-3 py-2.5">
+            <span class="relative flex w-2.5 h-2.5 shrink-0">
+                <span class="absolute inline-flex w-full h-full rounded-full bg-success opacity-60 animate-ping"></span>
+                <span class="relative inline-flex w-2.5 h-2.5 rounded-full bg-success"></span>
+            </span>
+            <div class="min-w-0">
+                <div class="text-xs text-text leading-tight">ระบบทำงานปกติ</div>
+                <div class="text-[11px] text-muted">อัปเดตล่าสุด @_time</div>
+            </div>
+        </div>
+    </div>
+</aside>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+
+    private string _time = DateTime.Now.ToString("HH:mm");
+
+    private record NavLinkDef(string Href, string Icon, string Label, string? Roles = null);
+
+    private static readonly NavLinkDef[] Links =
+    [
+        new("/dashboard", "home", "แดชบอร์ด"),
+        new("/items", "box", "รายการสินค้า"),
+        new("/purchases", "cart", "ค่าใช้จ่าย / การซื้อ"),
+        new("/withdrawals", "withdraw", "การเบิกของ"),
+        new("/licenses", "key", "License / Seat"),
+        new("/subscriptions", "refresh", "Subscription"),
+        new("/reports", "chart", "รายงาน"),
+        new("/users", "users", "ผู้ใช้งาน", AppRoles.Admin),
+    ];
+
+    private RenderFragment RenderLink(NavLinkDef link) =>@<NavLink class="nav-item" ActiveClass="nav-item-active" href="@link.Href" title="@link.Label">
+        <Icon Name="@link.Icon" Class="nav-icon" />
+        <span class="truncate">@link.Label</span>
+    </NavLink>;
+}

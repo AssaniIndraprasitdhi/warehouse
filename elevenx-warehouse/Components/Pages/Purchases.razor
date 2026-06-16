@@ -1,0 +1,404 @@
+@page "/purchases"
+@attribute [Authorize]
+@inject IPurchaseService PurchaseService
+@inject ISubscriptionService SubscriptionService
+@inject IItemService ItemService
+@inject CurrentUserAccessor CurrentUser
+@inject ToastService Toasts
+
+<PageTitle>ค่าใช้จ่าย / การซื้อ • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard Label="ค่าใช้จ่ายรวม (ที่กรอง)" Value="@FormatMoney(Filtered.Sum(p => p.TotalCost))" IconName="money" Color="accent" Sub="@($"{Filtered.Count} รายการ")" />
+        <StatCard Label="ซื้อครั้งเดียว / เติมสต็อก" Value="@FormatMoney(Filtered.Where(p => !p.IsRecurringCharge).Sum(p => p.TotalCost))" IconName="cart" Color="info" />
+        <StatCard Label="ค่ารอบ Subscription" Value="@FormatMoney(Filtered.Where(p => p.IsRecurringCharge).Sum(p => p.TotalCost))" IconName="refresh" Color="purple" />
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-56" placeholder="ค้นหารายการ..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <input type="date" class="input" @bind="_from" />
+            <span class="text-muted text-sm">ถึง</span>
+            <input type="date" class="input" @bind="_to" />
+            <select class="select" @bind="_typeFilter">
+                <option value="">ทุกประเภท</option>
+                <option value="@ItemType.IotMaterial">วัสดุ IoT</option>
+                <option value="@ItemType.Server">Server</option>
+                <option value="@ItemType.Software">Software</option>
+            </select>
+            <select class="select" @bind="_kindFilter">
+                <option value="">ทั้งหมด</option>
+                <option value="onetime">ซื้อครั้งเดียว</option>
+                <option value="recurring">ค่ารอบ</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <ExportButtons FileName="elevenx-purchases" TableFactory="BuildExport" />
+            @if (_canManage)
+            {
+                <button class="btn btn-secondary" @onclick="OpenRecurring"><Icon Name="refresh" Class="w-4 h-4" /> บันทึกค่ารอบ</button>
+                <button class="btn btn-primary" @onclick="OpenPurchase"><Icon Name="plus" Class="w-4 h-4" /> บันทึกการซื้อ</button>
+            }
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ไม่พบรายการค่าใช้จ่าย</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>วันที่</th>
+                            <th>รายการ</th>
+                            <th>ชนิด</th>
+                            <th class="text-right">จำนวน</th>
+                            <th class="text-right">ราคา/หน่วย</th>
+                            <th class="text-right">รวม</th>
+                            <th>ผู้ขาย</th>
+                            <th>ผู้บันทึก</th>
+                            @if (_canManage)
+                            {
+                                <th></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Filtered)
+                        {
+                            <tr>
+                                <td class="whitespace-nowrap">@p.Date.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <div class="flex items-center gap-2">
+                                        <ItemTypeBadge Type="p.Item.Type" />
+                                        <span class="text-text">@p.Item.Name</span>
+                                    </div>
+                                    @if (p.IsRecurringCharge && p.PeriodStart.HasValue)
+                                    {
+                                        <div class="text-xs text-muted">รอบ @p.PeriodStart?.ToString("dd/MM/yy") - @p.PeriodEnd?.ToString("dd/MM/yy")</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (p.IsRecurringCharge)
+                                    {
+                                        <span class="badge badge-purple">ค่ารอบ</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-info">ซื้อ/เติม</span>
+                                    }
+                                </td>
+                                <td class="text-right">@(p.Quantity > 0 ? p.Quantity.ToString() : "—")</td>
+                                <td class="text-right">@FormatMoney(p.UnitPrice)</td>
+                                <td class="text-right font-medium">@FormatMoney(p.TotalCost)</td>
+                                <td class="text-muted">@(p.Supplier?.Name ?? "—")</td>
+                                <td class="text-muted">@DisplayName(p.PurchasedBy)</td>
+                                @if (_canManage)
+                                {
+                                    <td class="text-right">
+                                        <button class="icon-btn hover:text-danger" title="ลบ" @onclick="() => AskDelete(p)"><Icon Name="trash" Class="w-4 h-4" /></button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Record purchase modal -->
+<Modal Show="_showPurchase" Title="บันทึกการซื้อ / เติมสต็อก" Size="md" OnClose="() => _showPurchase = false">
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(_formError))
+    {
+        <div class="mb-4"><AlertBanner Type="danger" Message="@_formError" /></div>
+    }
+    <div class="space-y-4">
+        <div>
+            <label class="form-label">รายการสินค้า *</label>
+            <select class="select" @bind="_pItemId">
+                <option value="0" disabled>เลือกรายการ</option>
+                @foreach (var i in _items.Where(i => i.CostType == CostType.OneTime || i.Type is ItemType.Server or ItemType.Software))
+                {
+                    <option value="@i.Id">@DisplayLabels.Type(i.Type) — @i.Name</option>
+                }
+            </select>
+            @if (SelectedPItem is not null)
+            {
+                <div class="field-hint">
+                    @(SelectedPItem.Type == ItemType.IotMaterial ? $"เติมเข้าสต็อก (คงเหลือ {SelectedPItem.Quantity} {SelectedPItem.Unit})"
+                        : SelectedPItem.Type is ItemType.Server or ItemType.Software ? "เพิ่มจำนวน Seat/License" : "บันทึกค่าใช้จ่าย")
+                </div>
+            }
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">@(SelectedPItem?.Type is ItemType.Server or ItemType.Software ? "จำนวน Seat ที่เพิ่ม" : "จำนวน") *</label>
+                <input type="number" min="1" class="input" @bind="_pQty" />
+            </div>
+            <div>
+                <label class="form-label">ราคา/หน่วย (฿) *</label>
+                <input type="number" min="0" step="0.01" class="input" @bind="_pUnit" />
+            </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">ผู้ขาย</label>
+                <select class="select" @bind="_pSupplierId">
+                    <option value="0">— ไม่ระบุ —</option>
+                    @foreach (var s in _suppliers)
+                    {
+                        <option value="@s.Id">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label">วันที่</label>
+                <input type="date" class="input" @bind="_pDate" />
+            </div>
+        </div>
+        <div class="flex items-center justify-between rounded-lg bg-surface-2/40 px-4 py-3">
+            <span class="text-sm text-muted">รวมเป็นเงิน</span>
+            <span class="text-lg font-semibold text-accent">@FormatMoney(_pQty * _pUnit)</span>
+        </div>
+        <div>
+            <label class="form-label">หมายเหตุ</label>
+            <input class="input" @bind="_pNote" />
+        </div>
+    </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showPurchase = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="SavePurchase" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            บันทึกการซื้อ
+        </button>
+    </Footer>
+</Modal>
+
+<!-- Record recurring charge modal -->
+<Modal Show="_showRecurring" Title="บันทึกค่ารอบ Subscription" Size="md" OnClose="() => _showRecurring = false">
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(_formError))
+    {
+        <div class="mb-4"><AlertBanner Type="danger" Message="@_formError" /></div>
+    }
+    @if (_activeSubs.Count == 0)
+    {
+        <div class="empty-state">ไม่มี subscription ที่ใช้งานอยู่</div>
+    }
+    else
+    {
+        <div class="space-y-4">
+            <div>
+                <label class="form-label">เลือก subscription *</label>
+                <select class="select" @bind="_rItemId">
+                    <option value="0" disabled>เลือก subscription</option>
+                    @foreach (var s in _activeSubs)
+                    {
+                        <option value="@s.Id">@s.Name — @FormatMoney(s.RecurringAmount ?? 0)/@(s.BillingCycle.HasValue ? DisplayLabels.Cycle(s.BillingCycle.Value) : "")</option>
+                    }
+                </select>
+            </div>
+            @if (SelectedSub is not null)
+            {
+                <div class="rounded-lg bg-surface-2/40 px-4 py-3 text-sm space-y-1">
+                    <div class="flex justify-between"><span class="text-muted">ค่ารอบนี้</span><span class="font-medium text-accent">@FormatMoney(SelectedSub.RecurringAmount ?? 0)</span></div>
+                    <div class="flex justify-between"><span class="text-muted">รอบบิลปัจจุบัน</span><span>@(SelectedSub.NextBillingDate?.ToString("dd/MM/yyyy") ?? "-")</span></div>
+                    <div class="flex justify-between"><span class="text-muted">รอบบิลถัดไป (หลังบันทึก)</span><span class="text-text">@NextAfter(SelectedSub)</span></div>
+                </div>
+            }
+            <div>
+                <label class="form-label">วันที่บันทึก</label>
+                <input type="date" class="input" @bind="_rDate" />
+            </div>
+        </div>
+    }
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showRecurring = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="SaveRecurring" disabled="@(_saving || _activeSubs.Count == 0)">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            บันทึกค่ารอบนี้
+        </button>
+    </Footer>
+</Modal>
+
+<ConfirmDialog Show="_confirmDelete" Danger="true" Busy="_deleting"
+               Title="ลบรายการค่าใช้จ่าย"
+               Message="ต้องการลบรายการนี้ใช่หรือไม่? หากเป็นการซื้อ/เติม สต็อกหรือ seat จะถูกปรับกลับ"
+               ConfirmText="ลบ" OnConfirm="DoDelete" OnCancel="() => _confirmDelete = false" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Purchase> _all = [];
+    private List<Item> _items = [];
+    private List<Item> _activeSubs = [];
+    private List<Supplier> _suppliers = [];
+    private bool _loading = true, _canManage;
+
+    private string _search = "", _typeFilter = "", _kindFilter = "";
+    private DateTime? _from, _to;
+
+    // purchase form
+    private bool _showPurchase, _saving;
+    private string? _formError;
+    private int _pItemId, _pSupplierId;
+    private int _pQty = 1;
+    private decimal _pUnit;
+    private DateTime _pDate = DateTime.Today;
+    private string? _pNote;
+
+    // recurring form
+    private bool _showRecurring;
+    private int _rItemId;
+    private DateTime _rDate = DateTime.Today;
+
+    // delete
+    private bool _confirmDelete, _deleting;
+    private Purchase? _deleteTarget;
+
+    private Item? SelectedPItem => _items.FirstOrDefault(i => i.Id == _pItemId);
+    private Item? SelectedSub => _activeSubs.FirstOrDefault(i => i.Id == _rItemId);
+
+    private IReadOnlyList<Purchase> Filtered => _all.Where(p =>
+        (string.IsNullOrEmpty(_typeFilter) || p.Item.Type.ToString() == _typeFilter) &&
+        (_kindFilter != "onetime" || !p.IsRecurringCharge) &&
+        (_kindFilter != "recurring" || p.IsRecurringCharge) &&
+        (_from is null || p.Date.Date >= _from) &&
+        (_to is null || p.Date.Date <= _to) &&
+        (string.IsNullOrWhiteSpace(_search) || p.Item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var u = (await AuthState).User;
+            _canManage = u.IsInRole(AppRoles.Admin) || u.IsInRole(AppRoles.Purchaser);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _all = await PurchaseService.GetPurchasesAsync();
+        _items = await ItemService.GetItemsAsync();
+        _suppliers = await ItemService.GetSuppliersAsync();
+        _activeSubs = await SubscriptionService.GetSubscriptionsAsync(SubscriptionStatus.Active);
+        _loading = false;
+    }
+
+    private void OpenPurchase()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        _pItemId = 0; _pSupplierId = 0; _pQty = 1; _pUnit = 0; _pDate = DateTime.Today; _pNote = null;
+        _showPurchase = true;
+    }
+
+    private void OpenRecurring()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        _rItemId = _activeSubs.FirstOrDefault()?.Id ?? 0;
+        _rDate = DateTime.Today;
+        _showRecurring = true;
+    }
+
+    private async Task SavePurchase()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        if (_pItemId <= 0) { _formError = "กรุณาเลือกรายการสินค้า"; return; }
+
+        _saving = true;
+        var uid = await CurrentUser.GetUserIdAsync() ?? "";
+        var r = await PurchaseService.RecordPurchaseAsync(_pItemId, _pQty, _pUnit,
+            _pSupplierId > 0 ? _pSupplierId : null, uid, _pDate, _pNote);
+        _saving = false;
+
+        if (r.Success) { _showPurchase = false; await LoadAsync(); Toasts.Success("บันทึกค่าใช้จ่าย / การซื้อแล้ว"); }
+        else _formError = r.Error;
+    }
+
+    private async Task SaveRecurring()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        if (_rItemId <= 0) { _formError = "กรุณาเลือก subscription"; return; }
+
+        _saving = true;
+        var uid = await CurrentUser.GetUserIdAsync() ?? "";
+        var r = await SubscriptionService.RecordRecurringChargeAsync(_rItemId, uid, _rDate);
+        _saving = false;
+
+        if (r.Success) { _showRecurring = false; await LoadAsync(); Toasts.Success("บันทึกค่ารอบ subscription แล้ว"); }
+        else _formError = r.Error;
+    }
+
+    private void AskDelete(Purchase p) { if (!_canManage) return; _deleteTarget = p; _confirmDelete = true; }
+
+    private async Task DoDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        var r = await PurchaseService.DeleteAsync(_deleteTarget.Id);
+        _deleting = false;
+        _confirmDelete = false;
+        if (r.Success) { await LoadAsync(); Toasts.Success("ลบรายการแล้ว"); }
+        else Toasts.Error(r.Error ?? "ลบไม่สำเร็จ");
+    }
+
+    private string NextAfter(Item sub) =>
+        sub.BillingCycle is { } c
+            ? BillingMath.Advance((sub.NextBillingDate ?? sub.StartDate ?? DateTime.Today), c).ToString("dd/MM/yyyy")
+            : "-";
+
+    private static string DisplayName(ApplicationUser u) => string.IsNullOrWhiteSpace(u.FullName) ? (u.Email ?? "-") : u.FullName;
+    private string FormatMoney(decimal v) => v.ToString("#,##0.##") + " ฿";
+
+    private ExportTable BuildExport()
+    {
+        var rows = Filtered.Select(p => new[]
+        {
+            p.Date.ToString("dd/MM/yyyy"),
+            p.Item.Name,
+            DisplayLabels.Type(p.Item.Type),
+            p.IsRecurringCharge ? "ค่ารอบ" : "ซื้อ/เติม",
+            p.Quantity > 0 ? p.Quantity.ToString() : "-",
+            p.UnitPrice.ToString("#,##0.##"),
+            p.TotalCost.ToString("#,##0.##"),
+            p.Supplier?.Name ?? "-",
+            DisplayName(p.PurchasedBy),
+        }).ToList();
+        return new ExportTable("ค่าใช้จ่าย / การซื้อ ElevenX",
+            ["วันที่", "รายการ", "ประเภท", "ชนิด", "จำนวน", "ราคา/หน่วย", "รวม", "ผู้ขาย", "ผู้บันทึก"], rows,
+            $"รวม {Filtered.Sum(p => p.TotalCost):#,##0.##} ฿ • {Filtered.Count} รายการ");
+    }
+}

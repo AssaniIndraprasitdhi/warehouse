@@ -1,0 +1,305 @@
+@page "/licenses"
+@attribute [Authorize]
+@inject ILicenseService LicenseService
+@inject IUserService UserService
+@inject CurrentUserAccessor CurrentUser
+@inject ToastService Toasts
+
+<PageTitle>License / Seat • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Seat usage cards -->
+    @if (!_loading)
+    {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (var s in _usage)
+            {
+                var nearFull = s.Total > 0 && (s.Available <= 1 || s.UsedRatio >= 0.9);
+                <div class="card card-pad">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <Icon Name="@UiColors.ItemTypeIcon(s.Type)" Class="@($"w-4 h-4 {UiColors.Text(UiColors.ItemTypeColor(s.Type))}")" />
+                                <span class="font-medium text-text truncate">@s.Name</span>
+                            </div>
+                            <div class="text-xs text-muted mt-0.5">@DisplayLabels.Type(s.Type)</div>
+                        </div>
+                        @if (nearFull)
+                        {
+                            <span class="badge badge-warning">ใกล้เต็ม</span>
+                        }
+                    </div>
+                    <div class="flex items-end justify-between mt-3">
+                        <span class="text-2xl font-semibold text-text">@s.Used<span class="text-base text-muted">/@s.Total</span></span>
+                        <span class="text-xs text-muted">ว่าง @s.Available</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-surface-2 mt-2 overflow-hidden">
+                        <div class="h-full @(nearFull ? "bg-warning" : "bg-accent")" style="width:@(Math.Min(100, s.UsedRatio * 100).ToString("0"))%"></div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-56" placeholder="ค้นหารายการ / ผู้ใช้..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <select class="select" @bind="_itemFilter">
+                <option value="0">ทุกรายการ</option>
+                @foreach (var s in _usage)
+                {
+                    <option value="@s.ItemId">@s.Name</option>
+                }
+            </select>
+            <select class="select" @bind="_statusFilter">
+                <option value="">ทั้งหมด</option>
+                <option value="active">ใช้งานอยู่</option>
+                <option value="released">คืนแล้ว</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <ExportButtons FileName="elevenx-licenses" TableFactory="BuildExport" />
+            @if (_canManage)
+            {
+                <button class="btn btn-primary" @onclick="OpenAssign"><Icon Name="key" Class="w-4 h-4" /> จ่าย Seat</button>
+            }
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ยังไม่มีการจ่าย License/Seat</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>รายการ</th>
+                            <th>ผู้ใช้ที่ได้รับ</th>
+                            <th>สถานะ</th>
+                            <th>วันที่จ่าย</th>
+                            <th>วันที่คืน</th>
+                            @if (_canManage)
+                            {
+                                <th class="text-right">จัดการ</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in Filtered)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-2">
+                                        <ItemTypeBadge Type="l.Item.Type" />
+                                        <span class="text-text">@l.Item.Name</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="text-text">@DisplayName(l.AssignedTo)</div>
+                                    <div class="text-xs text-muted">@l.AssignedTo.Email</div>
+                                </td>
+                                <td>
+                                    @if (l.IsActive)
+                                    {
+                                        <span class="badge badge-success">ใช้งานอยู่</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-neutral">คืนแล้ว</span>
+                                    }
+                                </td>
+                                <td class="text-muted whitespace-nowrap">@l.AssignedAt.ToString("dd/MM/yyyy")</td>
+                                <td class="text-muted whitespace-nowrap">@(l.ReleasedAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                @if (_canManage)
+                                {
+                                    <td class="text-right">
+                                        @if (l.IsActive)
+                                        {
+                                            <button class="btn btn-secondary btn-sm" @onclick="() => AskRelease(l)"><Icon Name="arrow-down" Class="w-3.5 h-3.5" /> คืน Seat</button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted text-xs">—</span>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Assign modal -->
+<Modal Show="_showAssign" Title="จ่าย License / Seat" Size="md" OnClose="() => _showAssign = false">
+    <ChildContent>
+        @if (!string.IsNullOrEmpty(_formError))
+        {
+            <div class="mb-4"><AlertBanner Type="danger" Message="@_formError" /></div>
+        }
+        <div class="space-y-4">
+            <div>
+                <label class="form-label">รายการ (Server / Software) *</label>
+                <select class="select" @bind="_aItemId">
+                    <option value="0" disabled>เลือกรายการ</option>
+                    @foreach (var s in _usage)
+                    {
+                        <option value="@s.ItemId" disabled="@(s.Available <= 0)">@s.Name (@s.Used/@s.Total@(s.Available <= 0 ? " เต็ม" : ""))</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label">จ่ายให้ผู้ใช้ *</label>
+                <select class="select" @bind="_aUserId">
+                    <option value="" disabled>เลือกผู้ใช้</option>
+                    @foreach (var u in _users)
+                    {
+                        <option value="@u.Id">@u.FullName (@u.Email)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label">หมายเหตุ</label>
+                <input class="input" @bind="_aNote" />
+            </div>
+        </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showAssign = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="SaveAssign" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            จ่าย Seat
+        </button>
+    </Footer>
+</Modal>
+
+<ConfirmDialog Show="_confirmRelease" Busy="_releasing"
+               Title="คืน Seat / License"
+               Message="@($"ต้องการคืน seat ของ \"{_releaseTarget?.AssignedTo.FullName}\" ใช่หรือไม่? seat จะกลับมาว่างให้จ่ายต่อได้")"
+               ConfirmText="คืน Seat" OnConfirm="DoRelease" OnCancel="() => _confirmRelease = false" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<LicenseAssignment> _all = [];
+    private List<SeatUsage> _usage = [];
+    private List<UserRow> _users = [];
+    private bool _loading = true, _canManage;
+
+    private string _search = "", _statusFilter = "";
+    private int _itemFilter;
+
+    private bool _showAssign, _saving;
+    private string? _formError;
+    private int _aItemId;
+    private string _aUserId = "", _aNote = "";
+
+    private bool _confirmRelease, _releasing;
+    private LicenseAssignment? _releaseTarget;
+
+    private IReadOnlyList<LicenseAssignment> Filtered => _all.Where(l =>
+        (_itemFilter == 0 || l.ItemId == _itemFilter) &&
+        (_statusFilter != "active" || l.IsActive) &&
+        (_statusFilter != "released" || !l.IsActive) &&
+        (string.IsNullOrWhiteSpace(_search)
+            || l.Item.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || l.AssignedTo.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || (l.AssignedTo.Email ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var u = (await AuthState).User;
+            _canManage = u.IsInRole(AppRoles.Admin) || u.IsInRole(AppRoles.Purchaser);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _all = await LicenseService.GetAssignmentsAsync();
+        _usage = await LicenseService.GetSeatUsageAsync();
+        if (_canManage && _users.Count == 0)
+            _users = await UserService.GetUsersAsync();
+        _loading = false;
+    }
+
+    private void OpenAssign()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        _aItemId = _usage.FirstOrDefault(s => s.Available > 0)?.ItemId ?? 0;
+        _aUserId = "";
+        _aNote = "";
+        _showAssign = true;
+    }
+
+    private async Task SaveAssign()
+    {
+        if (!_canManage) return;
+        _formError = null;
+        if (_aItemId <= 0) { _formError = "กรุณาเลือกรายการ"; return; }
+        if (string.IsNullOrEmpty(_aUserId)) { _formError = "กรุณาเลือกผู้ใช้"; return; }
+
+        _saving = true;
+        var by = await CurrentUser.GetUserIdAsync() ?? "";
+        var r = await LicenseService.AssignSeatAsync(_aItemId, _aUserId, by, string.IsNullOrWhiteSpace(_aNote) ? null : _aNote);
+        _saving = false;
+
+        if (r.Success) { _showAssign = false; await LoadAsync(); Toasts.Success("กำหนด seat ให้ผู้ใช้แล้ว"); }
+        else _formError = r.Error;
+    }
+
+    private void AskRelease(LicenseAssignment l) { if (!_canManage) return; _releaseTarget = l; _confirmRelease = true; }
+
+    private async Task DoRelease()
+    {
+        if (_releaseTarget is null) return;
+        _releasing = true;
+        var r = await LicenseService.ReleaseSeatAsync(_releaseTarget.Id);
+        _releasing = false;
+        _confirmRelease = false;
+        if (r.Success) { await LoadAsync(); Toasts.Success("คืน seat แล้ว"); }
+        else Toasts.Error(r.Error ?? "คืน seat ไม่สำเร็จ");
+    }
+
+    private static string DisplayName(ApplicationUser u) => string.IsNullOrWhiteSpace(u.FullName) ? (u.Email ?? "-") : u.FullName;
+
+    private ExportTable BuildExport()
+    {
+        var rows = Filtered.Select(l => new[]
+        {
+            l.Item.Name,
+            DisplayLabels.Type(l.Item.Type),
+            DisplayName(l.AssignedTo),
+            l.AssignedTo.Email ?? "",
+            l.IsActive ? "ใช้งานอยู่" : "คืนแล้ว",
+            l.AssignedAt.ToString("dd/MM/yyyy"),
+            l.ReleasedAt?.ToString("dd/MM/yyyy") ?? "-",
+        }).ToList();
+        return new ExportTable("รายงาน License / Seat ElevenX",
+            ["รายการ", "ประเภท", "ผู้ใช้", "อีเมล", "สถานะ", "วันที่จ่าย", "วันที่คืน"], rows,
+            $"{Filtered.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
+    }
+}

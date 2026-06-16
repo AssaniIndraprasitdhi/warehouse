@@ -1,0 +1,40 @@
+@if (Show)
+{
+    <div class="modal-backdrop" @onclick="OnCancel"></div>
+    <div class="modal-panel" @onclick="OnCancel">
+        <div class="card w-full max-w-md" @onclick:stopPropagation="true">
+            <div class="p-5">
+                <div class="flex items-start gap-3">
+                    <span class="stat-icon @(Danger ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning") shrink-0">
+                        <Icon Name="warning" />
+                    </span>
+                    <div class="min-w-0">
+                        <div class="text-base font-medium text-text">@Title</div>
+                        <div class="text-sm text-muted mt-1">@Message</div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-border flex justify-end gap-2">
+                <button class="btn btn-secondary" @onclick="OnCancel" disabled="@Busy">ยกเลิก</button>
+                <button class="btn @(Danger ? "btn-danger" : "btn-primary")" @onclick="OnConfirm" disabled="@Busy">
+                    @if (Busy)
+                    {
+                        <span class="spinner"></span>
+                    }
+                    @ConfirmText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Title { get; set; } = "ยืนยันการทำรายการ";
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public string ConfirmText { get; set; } = "ยืนยัน";
+    [Parameter] public bool Danger { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+}

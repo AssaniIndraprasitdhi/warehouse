@@ -1,0 +1,8 @@
+<span class="@UiColors.Badge(UiColors.ItemTypeColor(Type))">
+    <Icon Name="@UiColors.ItemTypeIcon(Type)" Class="w-3.5 h-3.5" />
+    @DisplayLabels.Type(Type)
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ItemType Type { get; set; }
+}

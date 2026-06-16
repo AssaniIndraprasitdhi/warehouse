@@ -1,0 +1,28 @@
+@page "/Error"
+@layout MainLayout
+@using System.Diagnostics
+
+<PageTitle>เกิดข้อผิดพลาด • ElevenX</PageTitle>
+
+<div class="grid place-items-center py-24 text-center">
+    <div class="w-16 h-16 rounded-xl bg-danger/15 grid place-items-center mb-4">
+        <Icon Name="warning" Class="w-8 h-8 text-danger" />
+    </div>
+    <div class="text-2xl font-semibold text-text">เกิดข้อผิดพลาด</div>
+    <p class="text-muted mt-2">ระบบไม่สามารถดำเนินการตามคำขอได้ กรุณาลองใหม่อีกครั้ง</p>
+    @if (ShowRequestId)
+    {
+        <p class="text-xs text-muted mt-3">Request ID: <code class="text-text">@RequestId</code></p>
+    }
+    <a href="/dashboard" class="btn btn-primary mt-6"><Icon Name="dashboard" Class="w-4 h-4" /> กลับสู่แดชบอร์ด</a>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

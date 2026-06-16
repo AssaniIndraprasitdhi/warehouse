@@ -1,0 +1,11 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=127.0.0.1;Port=5432;Database=elevenx_warehouse;Username=YOUR_DB_USER;Password=YOUR_DB_PASSWORD"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}

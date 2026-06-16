@@ -1,0 +1,316 @@
+@page "/reports"
+@attribute [Authorize]
+@inject IReportService ReportService
+@inject IItemService ItemService
+
+<PageTitle>รายงาน • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Tabs -->
+    <div class="flex items-center gap-1 border-b border-border">
+        <button class="@TabClass("spend")" @onclick='() => SetTab("spend")'><Icon Name="money" Class="w-4 h-4" /> ค่าใช้จ่าย</button>
+        <button class="@TabClass("withdraw")" @onclick='() => SetTab("withdraw")'><Icon Name="withdraw" Class="w-4 h-4" /> การเบิก</button>
+        <button class="@TabClass("license")" @onclick='() => SetTab("license")'><Icon Name="key" Class="w-4 h-4" /> การใช้ License</button>
+    </div>
+
+    @if (_tab == "spend")
+    {
+        <!-- Spend filters -->
+        <div class="card card-pad">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div>
+                    <label class="form-label">ตั้งแต่</label>
+                    <input type="date" class="input" @bind="_from" />
+                </div>
+                <div>
+                    <label class="form-label">ถึง</label>
+                    <input type="date" class="input" @bind="_to" />
+                </div>
+                <div>
+                    <label class="form-label">จัดกลุ่มตาม</label>
+                    <select class="select" @bind="_groupBy">
+                        <option value="@ReportGroupBy.Type">ประเภท</option>
+                        <option value="@ReportGroupBy.Category">หมวดหมู่</option>
+                        <option value="@ReportGroupBy.Purchaser">ผู้ซื้อ</option>
+                        <option value="@ReportGroupBy.Supplier">ผู้ขาย</option>
+                        <option value="@ReportGroupBy.Month">เดือน</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">ประเภท</label>
+                    <select class="select" @bind="_type">
+                        <option value="">ทั้งหมด</option>
+                        <option value="@ItemType.IotMaterial">วัสดุ IoT</option>
+                        <option value="@ItemType.Server">Server</option>
+                        <option value="@ItemType.Software">Software</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">ผู้ซื้อ</label>
+                    <select class="select" @bind="_purchaserId">
+                        <option value="">ทุกคน</option>
+                        @foreach (var p in _purchasers)
+                        {
+                            <option value="@p.Id">@(string.IsNullOrWhiteSpace(p.FullName) ? p.Email : p.FullName)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">ชนิดค่าใช้จ่าย</label>
+                    <select class="select" @bind="_kind">
+                        <option value="">ทั้งหมด</option>
+                        <option value="onetime">จ่ายครั้งเดียว</option>
+                        <option value="recurring">ค่ารอบ</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-between items-center mt-4">
+                <button class="btn btn-primary" @onclick="LoadSpend"><Icon Name="filter" Class="w-4 h-4" /> สร้างรายงาน</button>
+                @if (_spend is not null)
+                {
+                    <ExportButtons FileName="elevenx-report-spend" TableFactory="BuildSpendExport" />
+                }
+            </div>
+        </div>
+
+        @if (_loadingSpend)
+        {
+            <div class="card"><Spinner /></div>
+        }
+        else if (_spend is not null)
+        {
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <StatCard Label="ค่าใช้จ่ายรวม" Value="@FormatMoney(_spend.GrandTotal)" IconName="money" Color="accent" />
+                <StatCard Label="จ่ายครั้งเดียว" Value="@FormatMoney(_spend.OneTimeTotal)" IconName="cart" Color="info" />
+                <StatCard Label="ค่ารอบ Subscription" Value="@FormatMoney(_spend.RecurringTotal)" IconName="refresh" Color="purple" />
+                <StatCard Label="จำนวนรายการ" Value="@_spend.PurchaseCount.ToString()" IconName="box" Color="neutral" />
+            </div>
+
+            <div class="card overflow-hidden">
+                <div class="card-header"><span class="card-title">สรุปตาม@(GroupByLabel)</span></div>
+                @if (_spend.Rows.Count == 0)
+                {
+                    <div class="empty-state">ไม่มีข้อมูลในช่วงที่เลือก</div>
+                }
+                else
+                {
+                    <div class="overflow-x-auto">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>@GroupByLabel</th>
+                                    <th class="text-right">จ่ายครั้งเดียว</th>
+                                    <th class="text-right">ค่ารอบ</th>
+                                    <th class="text-right">รวม</th>
+                                    <th class="text-right">รายการ</th>
+                                    <th>สัดส่วน</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _spend.Rows)
+                                {
+                                    var pct = _spend.GrandTotal <= 0 ? 0 : (double)(r.Total / _spend.GrandTotal) * 100;
+                                    <tr>
+                                        <td class="text-text font-medium">@r.Key</td>
+                                        <td class="text-right text-muted">@FormatMoney(r.OneTime)</td>
+                                        <td class="text-right text-muted">@FormatMoney(r.Recurring)</td>
+                                        <td class="text-right font-medium">@FormatMoney(r.Total)</td>
+                                        <td class="text-right text-muted">@r.Count</td>
+                                        <td>
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                                                    <div class="h-full bg-accent" style="width:@pct.ToString("0")%"></div>
+                                                </div>
+                                                <span class="text-xs text-muted w-10">@pct.ToString("0")%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else if (_tab == "withdraw")
+    {
+        <div class="card card-pad">
+            <div class="flex flex-wrap items-end gap-3 justify-between">
+                <div class="flex flex-wrap items-end gap-3">
+                    <div><label class="form-label">ตั้งแต่</label><input type="date" class="input" @bind="_from" /></div>
+                    <div><label class="form-label">ถึง</label><input type="date" class="input" @bind="_to" /></div>
+                    <button class="btn btn-primary" @onclick="LoadWithdraw"><Icon Name="filter" Class="w-4 h-4" /> สร้างรายงาน</button>
+                </div>
+                @if (_withdraw.Count > 0)
+                {
+                    <ExportButtons FileName="elevenx-report-withdraw" TableFactory="BuildWithdrawExport" />
+                }
+            </div>
+        </div>
+        <div class="card overflow-hidden">
+            @if (_loadingWithdraw)
+            {
+                <Spinner />
+            }
+            else if (_withdraw.Count == 0)
+            {
+                <div class="empty-state">ไม่มีข้อมูลการเบิก</div>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead><tr><th>รายการ</th><th class="text-right">รวมที่เบิก</th><th class="text-right">จำนวนครั้ง</th><th>เบิกล่าสุด</th></tr></thead>
+                    <tbody>
+                        @foreach (var w in _withdraw)
+                        {
+                            <tr>
+                                <td class="text-text font-medium">@w.ItemName</td>
+                                <td class="text-right">@w.TotalQuantity</td>
+                                <td class="text-right text-muted">@w.Count</td>
+                                <td class="text-muted">@w.LastWithdrawnAt.ToString("dd/MM/yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="flex justify-end">
+            @if (_license.Count > 0)
+            {
+                <ExportButtons FileName="elevenx-report-license" TableFactory="BuildLicenseExport" />
+            }
+        </div>
+        <div class="card overflow-hidden">
+            @if (_loadingLicense)
+            {
+                <Spinner />
+            }
+            else if (_license.Count == 0)
+            {
+                <div class="empty-state">ไม่มีข้อมูล License</div>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead><tr><th>รายการ</th><th>ประเภท</th><th class="text-right">ใช้อยู่</th><th class="text-right">ทั้งหมด</th><th class="text-right">เคยจ่าย</th><th>การใช้งาน</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _license)
+                        {
+                            var ratio = l.Total <= 0 ? 0 : (double)l.Used / l.Total * 100;
+                            <tr>
+                                <td class="text-text font-medium">@l.ItemName</td>
+                                <td><ItemTypeBadge Type="l.Type" /></td>
+                                <td class="text-right">@l.Used</td>
+                                <td class="text-right text-muted">@l.Total</td>
+                                <td class="text-right text-muted">@l.EverAssigned</td>
+                                <td>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                                            <div class="h-full @(ratio >= 90 ? "bg-warning" : "bg-accent")" style="width:@ratio.ToString("0")%"></div>
+                                        </div>
+                                        <span class="text-xs text-muted w-10">@ratio.ToString("0")%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string _tab = "spend";
+
+    private DateTime _from = new(DateTime.Today.Year, 1, 1);
+    private DateTime _to = DateTime.Today;
+    private ReportGroupBy _groupBy = ReportGroupBy.Type;
+    private string _type = "", _purchaserId = "", _kind = "";
+
+    private List<ApplicationUser> _purchasers = [];
+    private SpendReportResult? _spend;
+    private List<WithdrawalReportRow> _withdraw = [];
+    private List<LicenseUsageRow> _license = [];
+    private bool _loadingSpend, _loadingWithdraw, _loadingLicense;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _purchasers = await ReportService.GetPurchasersAsync();
+        await LoadSpend();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "withdraw" && _withdraw.Count == 0) await LoadWithdraw();
+        else if (tab == "license" && _license.Count == 0) await LoadLicense();
+    }
+
+    private async Task LoadSpend()
+    {
+        _loadingSpend = true;
+        ItemType? type = string.IsNullOrEmpty(_type) ? null : Enum.Parse<ItemType>(_type);
+        bool? recurring = _kind switch { "onetime" => false, "recurring" => true, _ => null };
+        _spend = await ReportService.GetSpendReportAsync(_from, _to, _groupBy, type, null,
+            string.IsNullOrEmpty(_purchaserId) ? null : _purchaserId, recurring);
+        _loadingSpend = false;
+    }
+
+    private async Task LoadWithdraw()
+    {
+        _loadingWithdraw = true;
+        _withdraw = await ReportService.GetWithdrawalReportAsync(_from, _to);
+        _loadingWithdraw = false;
+    }
+
+    private async Task LoadLicense()
+    {
+        _loadingLicense = true;
+        _license = await ReportService.GetLicenseUsageReportAsync();
+        _loadingLicense = false;
+    }
+
+    private string TabClass(string tab) =>
+        $"flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors {(_tab == tab ? "border-accent text-accent" : "border-transparent text-muted hover:text-text")}";
+
+    private string GroupByLabel => _groupBy switch
+    {
+        ReportGroupBy.Type => "ประเภท",
+        ReportGroupBy.Category => "หมวดหมู่",
+        ReportGroupBy.Purchaser => "ผู้ซื้อ",
+        ReportGroupBy.Supplier => "ผู้ขาย",
+        ReportGroupBy.Month => "เดือน",
+        _ => "",
+    };
+
+    private string FormatMoney(decimal v) => v.ToString("#,##0.##") + " ฿";
+
+    private ExportTable BuildSpendExport()
+    {
+        var rows = (_spend?.Rows ?? []).Select(r => new[]
+        {
+            r.Key, r.OneTime.ToString("#,##0.##"), r.Recurring.ToString("#,##0.##"), r.Total.ToString("#,##0.##"), r.Count.ToString(),
+        }).ToList();
+        return new ExportTable($"รายงานค่าใช้จ่าย (ตาม{GroupByLabel})",
+            [GroupByLabel, "จ่ายครั้งเดียว", "ค่ารอบ", "รวม", "รายการ"], rows,
+            $"ช่วง {_from:dd/MM/yyyy} - {_to:dd/MM/yyyy} • รวม {_spend?.GrandTotal:#,##0.##} ฿");
+    }
+
+    private ExportTable BuildWithdrawExport()
+    {
+        var rows = _withdraw.Select(w => new[] { w.ItemName, w.TotalQuantity.ToString(), w.Count.ToString(), w.LastWithdrawnAt.ToString("dd/MM/yyyy") }).ToList();
+        return new ExportTable("รายงานการเบิกของ", ["รายการ", "รวมที่เบิก", "จำนวนครั้ง", "เบิกล่าสุด"], rows,
+            $"ช่วง {_from:dd/MM/yyyy} - {_to:dd/MM/yyyy}");
+    }
+
+    private ExportTable BuildLicenseExport()
+    {
+        var rows = _license.Select(l => new[] { l.ItemName, DisplayLabels.Type(l.Type), l.Used.ToString(), l.Total.ToString(), l.EverAssigned.ToString() }).ToList();
+        return new ExportTable("รายงานการใช้ License / Seat", ["รายการ", "ประเภท", "ใช้อยู่", "ทั้งหมด", "เคยจ่าย"], rows);
+    }
+}

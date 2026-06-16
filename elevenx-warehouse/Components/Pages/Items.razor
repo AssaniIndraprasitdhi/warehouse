@@ -1,0 +1,502 @@
+@page "/items"
+@attribute [Authorize]
+@inject IItemService ItemService
+@inject ILicenseService LicenseService
+@inject ToastService Toasts
+
+<PageTitle>รายการสินค้า • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-64" placeholder="ค้นหาชื่อ / SKU..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <select class="select" @bind="_typeFilter">
+                <option value="">ทุกประเภท</option>
+                <option value="@ItemType.IotMaterial">วัสดุ IoT</option>
+                <option value="@ItemType.Server">Server</option>
+                <option value="@ItemType.Software">Software</option>
+                <option value="@ItemType.Other">อื่น ๆ</option>
+            </select>
+            <select class="select" @bind="_categoryFilter">
+                <option value="">ทุกหมวดหมู่</option>
+                @foreach (var c in _categories)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <ExportButtons FileName="elevenx-items" TableFactory="BuildExport" />
+            @if (_canManage)
+            {
+                <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="plus" Class="w-4 h-4" /> เพิ่มรายการ</button>
+            }
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <span class="text-muted">ประเภท:</span>
+        <span class="legend-item"><ItemTypeBadge Type="ItemType.IotMaterial" /></span>
+        <span class="legend-item"><ItemTypeBadge Type="ItemType.Server" /></span>
+        <span class="legend-item"><ItemTypeBadge Type="ItemType.Software" /></span>
+        <span class="text-muted ml-2">สถานะ:</span>
+        <span class="legend-item"><span class="badge badge-danger">สต็อกต่ำ</span></span>
+        <span class="legend-item"><span class="badge badge-warning">Seat ใกล้เต็ม</span></span>
+        <span class="legend-item"><span class="badge badge-success">ใช้งานอยู่</span></span>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ไม่พบรายการสินค้า</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>รายการ</th>
+                            <th>ประเภท</th>
+                            <th>หมวดหมู่</th>
+                            <th>สต็อก / Seat</th>
+                            <th>ค่าใช้จ่าย</th>
+                            <th class="text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Filtered)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="font-medium text-text">@item.Name</div>
+                                    <div class="text-xs text-muted">@(string.IsNullOrEmpty(item.Sku) ? "—" : item.Sku)</div>
+                                </td>
+                                <td><ItemTypeBadge Type="item.Type" /></td>
+                                <td class="text-muted">@item.Category?.Name</td>
+                                <td>
+                                    @if (item.Type == ItemType.IotMaterial)
+                                    {
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium">@item.Quantity</span>
+                                            <span class="text-xs text-muted">@item.Unit</span>
+                                            @if (item.IsLowStock)
+                                            {
+                                                <span class="badge badge-danger">ต่ำ</span>
+                                            }
+                                        </div>
+                                        <div class="text-xs text-muted">ขั้นต่ำ @item.MinQuantity</div>
+                                    }
+                                    else if (item.Type is ItemType.Server or ItemType.Software && item.TotalSeats.HasValue)
+                                    {
+                                        var used = _usedSeats.GetValueOrDefault(item.Id);
+                                        var total = item.TotalSeats!.Value;
+                                        var ratio = total <= 0 ? 0 : (double)used / total;
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium">@used / @total</span>
+                                            @if (total > 0 && (total - used <= 1 || ratio >= 0.9))
+                                            {
+                                                <span class="badge badge-warning">ใกล้เต็ม</span>
+                                            }
+                                        </div>
+                                        <div class="w-28 h-1.5 rounded-full bg-surface-2 mt-1 overflow-hidden">
+                                            <div class="h-full @(ratio >= 0.9 ? "bg-warning" : "bg-accent")" style="width:@(Math.Min(100, ratio * 100).ToString("0"))%"></div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.CostType == CostType.Recurring)
+                                    {
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium">@FormatMoney(item.RecurringAmount ?? 0)</span>
+                                            <span class="text-xs text-muted">/ @(item.BillingCycle.HasValue ? DisplayLabels.Cycle(item.BillingCycle.Value) : "")</span>
+                                        </div>
+                                        <div class="mt-0.5"><StatusBadge Status="item.Status" /></div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-neutral">จ่ายครั้งเดียว</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    @if (_canManage)
+                                    {
+                                        <div class="inline-flex gap-1">
+                                            <button class="icon-btn" title="แก้ไข" @onclick="() => OpenEdit(item)"><Icon Name="edit" Class="w-4 h-4" /></button>
+                                            <button class="icon-btn hover:text-danger" title="ลบ" @onclick="() => AskDelete(item)"><Icon Name="trash" Class="w-4 h-4" /></button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted text-xs">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    <div class="text-xs text-muted">ทั้งหมด @Filtered.Count รายการ</div>
+</div>
+
+<!-- Add/Edit modal -->
+<Modal Show="_showForm" Title="@(_isNew ? "เพิ่มรายการสินค้า" : "แก้ไขรายการสินค้า")" Size="lg" OnClose="CloseForm">
+    <EditForm Model="_editItem" OnValidSubmit="Save">
+        <DataAnnotationsValidator />
+        @if (!string.IsNullOrEmpty(_formError))
+        {
+            <div class="mb-4"><AlertBanner Type="danger" Message="@_formError" /></div>
+        }
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-span-2">
+                <label class="form-label">ชื่อรายการ *</label>
+                <InputText class="input" @bind-Value="_editItem.Name" placeholder="เช่น เซ็นเซอร์ DHT22" />
+                <ValidationMessage For="() => _editItem.Name" />
+            </div>
+            <div>
+                <label class="form-label">SKU</label>
+                <InputText class="input" @bind-Value="_editItem.Sku" placeholder="ไม่บังคับ (ต้องไม่ซ้ำ)" />
+            </div>
+            <div>
+                <label class="form-label">หมวดหมู่ *</label>
+                <InputSelect class="select" @bind-Value="_editItem.CategoryId">
+                    <option value="0" disabled>เลือกหมวดหมู่</option>
+                    @foreach (var c in _categories)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div>
+                <label class="form-label">ประเภท *</label>
+                <InputSelect class="select" @bind-Value="_editItem.Type">
+                    <option value="@ItemType.IotMaterial">วัสดุ IoT (มีสต็อก)</option>
+                    <option value="@ItemType.Server">Server</option>
+                    <option value="@ItemType.Software">Software</option>
+                    <option value="@ItemType.Other">อื่น ๆ</option>
+                </InputSelect>
+            </div>
+            <div>
+                <label class="form-label">รูปแบบค่าใช้จ่าย *</label>
+                <InputSelect class="select" @bind-Value="_editItem.CostType">
+                    <option value="@CostType.OneTime">จ่ายครั้งเดียว (One-time)</option>
+                    <option value="@CostType.Recurring">Subscription (รายรอบ)</option>
+                </InputSelect>
+            </div>
+
+            <!-- IoT fields -->
+            @if (_editItem.Type == ItemType.IotMaterial)
+            {
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-surface-2/30 border border-border">
+                    <div class="md:col-span-3 text-xs text-info">ข้อมูลสต็อก (วัสดุ IoT)</div>
+                    <div>
+                        <label class="form-label">หน่วยนับ</label>
+                        <InputText class="input" @bind-Value="_editItem.Unit" placeholder="ชิ้น / ม้วน / เมตร" />
+                    </div>
+                    <div>
+                        <label class="form-label">จุดเตือนสต็อกต่ำ</label>
+                        <InputNumber class="input" @bind-Value="_editItem.MinQuantity" />
+                    </div>
+                    <div>
+                        <label class="form-label">ตำแหน่งจัดเก็บ</label>
+                        <InputText class="input" @bind-Value="_editItem.Location" placeholder="เช่น คลัง A-1" />
+                    </div>
+                    @if (_isNew)
+                    {
+                        <div>
+                            <label class="form-label">จำนวนเริ่มต้น</label>
+                            <InputNumber class="input" @bind-Value="_initialQty" />
+                        </div>
+                        <div class="md:col-span-2 self-end field-hint">หลังสร้างแล้ว สต็อกจะเปลี่ยนผ่านการซื้อ/เบิกเท่านั้น</div>
+                    }
+                    else
+                    {
+                        <div class="md:col-span-3 field-hint">คงเหลือปัจจุบัน: <span class="text-text font-medium">@_editItem.Quantity @_editItem.Unit</span> (แก้ไขผ่านเมนูซื้อ/เบิก)</div>
+                    }
+                </div>
+            }
+
+            <!-- Server/Software seat fields -->
+            @if (_editItem.Type is ItemType.Server or ItemType.Software)
+            {
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-surface-2/30 border border-border">
+                    <div class="md:col-span-2 text-xs text-purple">ข้อมูล License / Seat</div>
+                    <div>
+                        <label class="form-label">จำนวน Seat / License ทั้งหมด</label>
+                        <InputNumber class="input" @bind-Value="_seatsInput" />
+                        <div class="field-hint">ใช้ไปแล้ว @(_usedSeats.GetValueOrDefault(_editItem.Id)) seat (คำนวณจากการจ่าย license)</div>
+                    </div>
+                </div>
+            }
+
+            <!-- Recurring/subscription fields -->
+            @if (_editItem.CostType == CostType.Recurring)
+            {
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-surface-2/30 border border-border">
+                    <div class="md:col-span-3 text-xs text-accent">ข้อมูล Subscription</div>
+                    <div>
+                        <label class="form-label">ค่าใช้จ่ายต่อรอบ (฿) *</label>
+                        <InputNumber class="input" @bind-Value="_recurringInput" />
+                    </div>
+                    <div>
+                        <label class="form-label">รอบบิล *</label>
+                        <InputSelect class="select" @bind-Value="_cycleInput">
+                            <option value="@BillingCycle.Monthly">รายเดือน</option>
+                            <option value="@BillingCycle.Quarterly">ราย 3 เดือน</option>
+                            <option value="@BillingCycle.Yearly">รายปี</option>
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="form-label">สถานะ</label>
+                        <InputSelect class="select" @bind-Value="_statusInput">
+                            <option value="@SubscriptionStatus.Active">ใช้งานอยู่</option>
+                            <option value="@SubscriptionStatus.Cancelled">ยกเลิกแล้ว</option>
+                            <option value="@SubscriptionStatus.Expired">หมดอายุ</option>
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="form-label">วันเริ่ม</label>
+                        <InputDate class="input" @bind-Value="_editItem.StartDate" />
+                    </div>
+                    <div>
+                        <label class="form-label">รอบบิลถัดไป</label>
+                        <InputDate class="input" @bind-Value="_editItem.NextBillingDate" />
+                    </div>
+                    <div>
+                        <label class="form-label">วันสิ้นสุด (ถ้ามี)</label>
+                        <InputDate class="input" @bind-Value="_editItem.EndDate" />
+                    </div>
+                </div>
+            }
+
+            <div class="md:col-span-2">
+                <label class="form-label">หมายเหตุ</label>
+                <InputTextArea class="textarea" rows="2" @bind-Value="_editItem.Note" />
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-6">
+            <button type="button" class="btn btn-secondary" @onclick="CloseForm">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @if (_saving)
+                {
+                    <span class="spinner"></span>
+                }
+                บันทึกข้อมูล
+            </button>
+        </div>
+    </EditForm>
+</Modal>
+
+<ConfirmDialog Show="_confirmDelete" Danger="true" Busy="_deleting"
+               Title="ลบรายการสินค้า"
+               Message="@($"ต้องการลบ \"{_deleteTarget?.Name}\" ใช่หรือไม่? ประวัติการซื้อ/เบิก/license ที่เกี่ยวข้องจะถูกลบด้วย")"
+               ConfirmText="ลบรายการ" OnConfirm="DoDelete" OnCancel="() => _confirmDelete = false" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Item> _items = [];
+    private List<Category> _categories = [];
+    private Dictionary<int, int> _usedSeats = [];
+    private bool _loading = true, _canManage;
+
+    // filters
+    private string _search = "";
+    private string _typeFilter = "";
+    private string _categoryFilter = "";
+
+    // form
+    private bool _showForm, _isNew, _saving;
+    private string? _formError;
+    private Item _editItem = new();
+    private int _initialQty;
+    private int? _seatsInput;
+    private decimal? _recurringInput;
+    private BillingCycle _cycleInput = BillingCycle.Monthly;
+    private SubscriptionStatus _statusInput = SubscriptionStatus.Active;
+
+    // delete
+    private bool _confirmDelete, _deleting;
+    private Item? _deleteTarget;
+
+    private IReadOnlyList<Item> Filtered => _items.Where(i =>
+        (string.IsNullOrEmpty(_typeFilter) || i.Type.ToString() == _typeFilter) &&
+        (string.IsNullOrEmpty(_categoryFilter) || i.CategoryId.ToString() == _categoryFilter) &&
+        (string.IsNullOrWhiteSpace(_search)
+            || i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || (i.Sku ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var u = (await AuthState).User;
+            _canManage = u.IsInRole(AppRoles.Admin) || u.IsInRole(AppRoles.Purchaser);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _categories = await ItemService.GetCategoriesAsync();
+        _items = await ItemService.GetItemsAsync();
+        _usedSeats = await LicenseService.GetUsedSeatsMapAsync();
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        if (!_canManage) return;
+        _isNew = true;
+        _formError = null;
+        _editItem = new Item
+        {
+            Type = ItemType.IotMaterial,
+            CostType = CostType.OneTime,
+            CategoryId = _categories.FirstOrDefault()?.Id ?? 0,
+        };
+        _initialQty = 0;
+        _seatsInput = null;
+        _recurringInput = null;
+        _cycleInput = BillingCycle.Monthly;
+        _statusInput = SubscriptionStatus.Active;
+        _showForm = true;
+    }
+
+    private void OpenEdit(Item item)
+    {
+        if (!_canManage) return;
+        _isNew = false;
+        _formError = null;
+        _editItem = new Item
+        {
+            Id = item.Id, Name = item.Name, Sku = item.Sku, CategoryId = item.CategoryId,
+            Type = item.Type, CostType = item.CostType, Note = item.Note,
+            Unit = item.Unit, Quantity = item.Quantity, MinQuantity = item.MinQuantity, Location = item.Location,
+            TotalSeats = item.TotalSeats, RecurringAmount = item.RecurringAmount, BillingCycle = item.BillingCycle,
+            StartDate = item.StartDate, EndDate = item.EndDate, NextBillingDate = item.NextBillingDate, Status = item.Status,
+        };
+        _seatsInput = item.TotalSeats;
+        _recurringInput = item.RecurringAmount;
+        _cycleInput = item.BillingCycle ?? BillingCycle.Monthly;
+        _statusInput = item.Status ?? SubscriptionStatus.Active;
+        _showForm = true;
+    }
+
+    private void CloseForm() => _showForm = false;
+
+    private async Task Save()
+    {
+        if (!_canManage) return;
+        _formError = null;
+
+        if (_editItem.CategoryId <= 0)
+        {
+            _formError = "กรุณาเลือกหมวดหมู่";
+            return;
+        }
+
+        // ผูกค่าจากฟิลด์เสริมกลับเข้า entity ตามประเภท
+        if (_editItem.Type is ItemType.Server or ItemType.Software)
+            _editItem.TotalSeats = _seatsInput;
+
+        if (_editItem.CostType == CostType.Recurring)
+        {
+            if (_recurringInput is null or <= 0)
+            {
+                _formError = "กรุณาระบุค่าใช้จ่ายต่อรอบ";
+                return;
+            }
+            _editItem.RecurringAmount = _recurringInput;
+            _editItem.BillingCycle = _cycleInput;
+            _editItem.Status = _statusInput;
+        }
+
+        if (_isNew && _editItem.Type == ItemType.IotMaterial)
+            _editItem.Quantity = Math.Max(0, _initialQty);
+
+        _saving = true;
+        string? error;
+        if (_isNew)
+        {
+            var r = await ItemService.CreateAsync(_editItem);
+            error = r.Success ? null : r.Error;
+        }
+        else
+        {
+            var r = await ItemService.UpdateAsync(_editItem);
+            error = r.Success ? null : r.Error;
+        }
+        _saving = false;
+
+        if (error is null)
+        {
+            _showForm = false;
+            await LoadAsync();
+            Toasts.Success(_isNew ? $"เพิ่มสินค้า “{_editItem.Name}” แล้ว" : $"บันทึกการแก้ไข “{_editItem.Name}” แล้ว");
+        }
+        else
+        {
+            _formError = error;
+        }
+    }
+
+    private void AskDelete(Item item)
+    {
+        if (!_canManage) return;
+        _deleteTarget = item;
+        _confirmDelete = true;
+    }
+
+    private async Task DoDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        var result = await ItemService.DeleteAsync(_deleteTarget.Id);
+        _deleting = false;
+        _confirmDelete = false;
+        if (result.Success)
+        {
+            var name = _deleteTarget?.Name;
+            await LoadAsync();
+            Toasts.Success($"ลบสินค้า “{name}” แล้ว");
+        }
+        else Toasts.Error(result.Error ?? "ลบไม่สำเร็จ");
+    }
+
+    private string FormatMoney(decimal v) => v.ToString("#,##0.##") + " ฿";
+
+    private ExportTable BuildExport()
+    {
+        var rows = Filtered.Select(i => new[]
+        {
+            i.Name,
+            i.Sku ?? "",
+            DisplayLabels.Type(i.Type),
+            i.Category?.Name ?? "",
+            i.Type == ItemType.IotMaterial ? $"{i.Quantity} {i.Unit}" : (i.TotalSeats.HasValue ? $"{_usedSeats.GetValueOrDefault(i.Id)}/{i.TotalSeats}" : "-"),
+            i.CostType == CostType.Recurring ? $"{i.RecurringAmount:#,##0} ({(i.BillingCycle.HasValue ? DisplayLabels.Cycle(i.BillingCycle.Value) : "")})" : "จ่ายครั้งเดียว",
+        }).ToList();
+        return new ExportTable("รายการสินค้า ElevenX", ["ชื่อ", "SKU", "ประเภท", "หมวดหมู่", "สต็อก/Seat", "ค่าใช้จ่าย"], rows,
+            $"จำนวน {rows.Count} รายการ • {DateTime.Now:dd/MM/yyyy}");
+    }
+}

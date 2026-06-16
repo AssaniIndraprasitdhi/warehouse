@@ -1,0 +1,221 @@
+@page "/dashboard"
+@attribute [Authorize]
+@inject IDashboardService DashboardService
+
+<PageTitle>แดชบอร์ด • ElevenX</PageTitle>
+
+@if (_loading || _summary is null)
+{
+    <Spinner FullHeight="true" />
+}
+else
+{
+    <div class="space-y-5">
+        <!-- KPI row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard Label="มูลค่าสต็อก IoT รวม" Value="@Money(_summary.IotStockValue)" IconName="package" Color="accent" Sub="@($"{_summary.IotItemCount} รายการวัสดุ")" />
+            <StatCard Label="ค่าใช้จ่ายเดือนนี้" Value="@Money(_summary.ThisMonthSpend)" IconName="cart" Color="info">
+                @{
+                    var diff = _summary.ThisMonthSpend - _summary.LastMonthSpend;
+                    var pct = _summary.LastMonthSpend <= 0 ? 0 : (double)(diff / _summary.LastMonthSpend) * 100;
+                }
+                <span class="inline-flex items-center gap-1 @(diff >= 0 ? "kpi-trend-up" : "kpi-trend-down")">
+                    <Icon Name="@(diff >= 0 ? "arrow-up" : "arrow-down")" Class="w-3 h-3" />
+                    @Math.Abs(pct).ToString("0.0")% เทียบเดือนก่อน
+                </span>
+            </StatCard>
+            <StatCard Label="ค่า Subscription รวม/เดือน" Value="@Money(_summary.MonthlySubscriptionTotal)" IconName="refresh" Color="purple" Sub="@($"{_summary.ActiveSubscriptions} subscription ที่ใช้งาน")" />
+            <StatCard Label="Seat ที่ใช้ไป" Value="@($"{_summary.UsedSeatsTotal} / {_summary.TotalSeatsTotal}")" IconName="key" Color="success" Sub="License / Seat ทั้งหมด" />
+        </div>
+
+        <!-- Alert row -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="/items" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+                <span class="stat-icon @UiColors.SoftBg("danger")"><Icon Name="warning" /></span>
+                <div><div class="stat-value text-xl">@_summary.LowStockCount</div><div class="stat-label">สต็อกต่ำ</div></div>
+            </a>
+            <a href="/licenses" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+                <span class="stat-icon @UiColors.SoftBg("warning")"><Icon Name="seat" /></span>
+                <div><div class="stat-value text-xl">@_summary.SeatsNearFullCount</div><div class="stat-label">Seat ใกล้เต็ม</div></div>
+            </a>
+            <a href="/subscriptions" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+                <span class="stat-icon @UiColors.SoftBg("info")"><Icon Name="clock" /></span>
+                <div><div class="stat-value text-xl">@_summary.UpcomingRenewals.Count</div><div class="stat-label">ใกล้ครบรอบ (30 วัน)</div></div>
+            </a>
+            <a href="/subscriptions" class="card card-pad flex items-center gap-3 hover:bg-surface-2/40 transition-colors">
+                <span class="stat-icon @UiColors.SoftBg("purple")"><Icon Name="refresh" /></span>
+                <div><div class="stat-value text-xl">@_summary.ActiveSubscriptions</div><div class="stat-label">Subscription ใช้งาน</div></div>
+            </a>
+        </div>
+
+        <!-- Chart + upcoming renewals -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="card lg:col-span-2">
+                <div class="card-header">
+                    <span class="card-title">ค่าใช้จ่ายรายเดือน (แยกตามประเภท)</span>
+                    <div class="legend">
+                        <span class="legend-item"><span class="legend-dot bg-info"></span>IoT</span>
+                        <span class="legend-item"><span class="legend-dot bg-purple"></span>Server</span>
+                        <span class="legend-item"><span class="legend-dot bg-accent"></span>Software</span>
+                    </div>
+                </div>
+                <div class="p-3">
+                    <ApexChart TItem="MonthlySpendPoint" Options="_chartOptions" Height="300">
+                        <ApexPointSeries TItem="MonthlySpendPoint" Items="_summary.MonthlySpendSeries" Name="IoT"
+                                         SeriesType="SeriesType.Bar" XValue="@(e => e.Month)" YValue="@(e => e.Iot)" />
+                        <ApexPointSeries TItem="MonthlySpendPoint" Items="_summary.MonthlySpendSeries" Name="Server"
+                                         SeriesType="SeriesType.Bar" XValue="@(e => e.Month)" YValue="@(e => e.Server)" />
+                        <ApexPointSeries TItem="MonthlySpendPoint" Items="_summary.MonthlySpendSeries" Name="Software"
+                                         SeriesType="SeriesType.Bar" XValue="@(e => e.Month)" YValue="@(e => e.Software)" />
+                    </ApexChart>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">ใกล้ครบรอบใน 30 วัน</span></div>
+                <div class="divide-y divide-border/60 max-h-[340px] overflow-y-auto">
+                    @if (_summary.UpcomingRenewals.Count == 0)
+                    {
+                        <div class="empty-state">ไม่มี subscription ที่ใกล้ครบรอบ</div>
+                    }
+                    else
+                    {
+                        @foreach (var r in _summary.UpcomingRenewals)
+                        {
+                            <div class="flex items-center justify-between px-5 py-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm text-text truncate">@r.Name</div>
+                                    <div class="text-xs text-muted">@r.NextBillingDate.ToString("dd/MM/yyyy") • @Money(r.Amount)</div>
+                                </div>
+                                <span class="badge @(r.DaysUntil <= 7 ? "badge-danger" : "badge-warning")">อีก @r.DaysUntil วัน</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Low stock + seats near full -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">สต็อกต่ำ</span>
+                    <a href="/items" class="text-xs text-accent">ดูทั้งหมด</a>
+                </div>
+                <div class="divide-y divide-border/60">
+                    @if (_summary.LowStockItems.Count == 0)
+                    {
+                        <div class="empty-state">สต็อกทุกรายการปกติ</div>
+                    }
+                    else
+                    {
+                        @foreach (var i in _summary.LowStockItems.Take(6))
+                        {
+                            <div class="flex items-center justify-between px-5 py-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm text-text truncate">@i.Name</div>
+                                    <div class="text-xs text-muted">@i.Category?.Name • ขั้นต่ำ @i.MinQuantity @i.Unit</div>
+                                </div>
+                                <span class="badge badge-danger">เหลือ @i.Quantity @i.Unit</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Seat ใกล้เต็ม</span>
+                    <a href="/licenses" class="text-xs text-accent">ดูทั้งหมด</a>
+                </div>
+                <div class="divide-y divide-border/60">
+                    @if (_summary.SeatsNearFull.Count == 0)
+                    {
+                        <div class="empty-state">ไม่มี seat ที่ใกล้เต็ม</div>
+                    }
+                    else
+                    {
+                        @foreach (var s in _summary.SeatsNearFull.Take(6))
+                        {
+                            <div class="flex items-center justify-between px-5 py-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm text-text truncate">@s.Name</div>
+                                    <div class="text-xs text-muted">@DisplayLabels.Type(s.Type) • ว่าง @s.Available</div>
+                                </div>
+                                <span class="badge badge-warning">@s.Used / @s.Total</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent activity -->
+        <div class="card">
+            <div class="card-header"><span class="card-title">รายการเคลื่อนไหวล่าสุด</span></div>
+            <div class="divide-y divide-border/60">
+                @if (_summary.RecentActivity.Count == 0)
+                {
+                    <div class="empty-state">ยังไม่มีความเคลื่อนไหว</div>
+                }
+                else
+                {
+                    @foreach (var a in _summary.RecentActivity)
+                    {
+                        <div class="flex items-center gap-3 px-5 py-3">
+                            <span class="stat-icon w-8 h-8 @UiColors.SoftBg(a.Color)"><Icon Name="@KindIcon(a.Kind)" Class="w-4 h-4" /></span>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm text-text">@a.Description</div>
+                                <div class="text-xs text-muted">@a.When.ToString("dd/MM/yyyy HH:mm")@(a.User is null ? "" : $" • {a.User}")</div>
+                            </div>
+                            <span class="@UiColors.Badge(a.Color)">@a.Kind</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardSummary? _summary;
+    private bool _loading = true;
+    private ApexChartOptions<MonthlySpendPoint> _chartOptions = new();
+
+    protected override void OnInitialized()
+    {
+        _chartOptions = new ApexChartOptions<MonthlySpendPoint>
+        {
+            Chart = new Chart
+            {
+                Stacked = true,
+                Background = "transparent",
+                FontFamily = "Kanit, sans-serif",
+                Toolbar = new Toolbar { Show = false },
+            },
+            Theme = new Theme { Mode = Mode.Light },
+            Colors = new List<string> { "#2563EB", "#7C3AED", "#138A72" }, // info / purple / accent — ตรงกับ legend
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { ColumnWidth = "45%", BorderRadius = 4 } },
+            DataLabels = new DataLabels { Enabled = false },
+            Grid = new Grid { BorderColor = "#E3E7EB" },
+            Legend = new Legend { Show = false },
+            Stroke = new Stroke { Show = false },
+        };
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _summary = await DashboardService.GetSummaryAsync();
+        _loading = false;
+    }
+
+    private static string Money(decimal v) => v.ToString("#,##0") + " ฿";
+
+    private static string KindIcon(string kind) => kind switch
+    {
+        "เบิก" => "withdraw",
+        "License" => "key",
+        "ค่ารอบ" => "refresh",
+        _ => "cart",
+    };
+}

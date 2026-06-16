@@ -1,0 +1,8 @@
+@if (Status is { } s)
+{
+    <span class="@UiColors.Badge(UiColors.StatusColor(s))">@DisplayLabels.Status(s)</span>
+}
+
+@code {
+    [Parameter] public SubscriptionStatus? Status { get; set; }
+}

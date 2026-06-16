@@ -1,0 +1,44 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Nav
+
+<div class="app-shell">
+    <Sidebar Open="_navOpen" />
+    @if (_navOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="CloseNav"></div>
+    }
+    <div class="app-main">
+        <TopBar OnToggle="ToggleNav" />
+        <main class="app-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+<ToastHost />
+
+<div id="blazor-error-ui" data-nosnippet>
+    เกิดข้อผิดพลาดที่ไม่คาดคิด
+    <a href="." class="reload">โหลดใหม่</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool _navOpen;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+    private void CloseNav() => _navOpen = false;
+
+    // ปิด drawer อัตโนมัติเมื่อเปลี่ยนหน้า (เช่น แตะเมนูบนมือถือ)
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (!_navOpen) return;
+        _navOpen = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

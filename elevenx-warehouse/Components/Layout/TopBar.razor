@@ -1,0 +1,183 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IItemService ItemService
+@inject ILicenseService LicenseService
+@inject ISubscriptionService SubscriptionService
+
+<header class="topbar">
+    <!-- Left: toggle + breadcrumb -->
+    <div class="flex items-center gap-3 min-w-0">
+        <button class="icon-btn lg:hidden" @onclick="OnToggle" title="เปิดเมนู">
+            <Icon Name="menu" />
+        </button>
+        <div class="min-w-0">
+            <div class="page-title truncate">@_title</div>
+            <div class="breadcrumb">
+                <span>หน้าหลัก</span>
+                <span class="px-1">/</span>
+                <span class="breadcrumb-current">@_title</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: actions -->
+    <div class="flex items-center gap-1.5">
+        <!-- Notifications -->
+        <div class="relative">
+            <button class="icon-btn" @onclick="ToggleNotif" title="การแจ้งเตือน">
+                <Icon Name="bell" />
+                @if (_alerts.Count > 0)
+                {
+                    <span class="icon-badge">@(_alerts.Count > 9 ? "9+" : _alerts.Count.ToString())</span>
+                }
+            </button>
+            @if (_showNotif)
+            {
+                <div class="absolute right-0 mt-2 w-80 card z-50 overflow-hidden">
+                    <div class="card-header">
+                        <span class="card-title">การแจ้งเตือน</span>
+                        <span class="badge badge-neutral">@_alerts.Count</span>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto">
+                        @if (_alerts.Count == 0)
+                        {
+                            <div class="empty-state">ไม่มีการแจ้งเตือน</div>
+                        }
+                        else
+                        {
+                            @foreach (var a in _alerts)
+                            {
+                                <a href="@a.Href" @onclick="CloseAll"
+                                   class="flex items-start gap-3 px-4 py-3 border-b border-border/60 last:border-0 hover:bg-surface-2/40 transition-colors">
+                                    <span class="stat-icon w-8 h-8 shrink-0 @UiColors.SoftBg(a.Color)">
+                                        <Icon Name="@a.Icon" Class="w-4 h-4" />
+                                    </span>
+                                    <div class="min-w-0">
+                                        <div class="text-sm text-text leading-snug">@a.Title</div>
+                                        <div class="text-xs text-muted">@a.Detail</div>
+                                    </div>
+                                </a>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Help -->
+        <button class="icon-btn" title="ช่วยเหลือ" @onclick='() => Nav.NavigateTo("/dashboard")'>
+            <Icon Name="help" />
+        </button>
+
+        <!-- Profile -->
+        <div class="relative">
+            <button class="flex items-center gap-2.5 pl-1.5 pr-2 py-1.5 rounded-lg hover:bg-surface-2 transition-colors" @onclick="ToggleProfile">
+                <span class="w-8 h-8 rounded-full bg-accent grid place-items-center text-white text-sm font-medium shrink-0">@_initial</span>
+                <span class="text-left hidden sm:block leading-tight">
+                    <span class="block text-sm text-text">@_name</span>
+                    <span class="block text-[11px] text-muted">@_roleLabel</span>
+                </span>
+                <Icon Name="chevron-down" Class="w-4 h-4 text-muted hidden sm:block" />
+            </button>
+            @if (_showProfile)
+            {
+                <div class="absolute right-0 mt-2 w-60 card z-50 overflow-hidden">
+                    <div class="px-4 py-3 border-b border-border">
+                        <div class="text-sm text-text">@_name</div>
+                        <div class="text-xs text-muted truncate">@_email</div>
+                        <div class="mt-2"><span class="badge badge-accent">@_roleLabel</span></div>
+                    </div>
+                    <form method="post" action="/auth/logout">
+                        <button type="submit" class="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-danger hover:bg-surface-2/60 transition-colors">
+                            <Icon Name="logout" Class="w-4 h-4" /> ออกจากระบบ
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    </div>
+</header>
+
+@if (_showNotif || _showProfile)
+{
+    <div class="fixed inset-0 z-40" @onclick="CloseAll"></div>
+}
+
+@code {
+    [Parameter] public EventCallback OnToggle { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _title = "แดชบอร์ด";
+    private bool _showNotif, _showProfile;
+    private string _name = "", _email = "", _roleLabel = "", _initial = "?";
+    private List<Alert> _alerts = [];
+
+    private record Alert(string Title, string Detail, string Href, string Icon, string Color);
+
+    private static readonly Dictionary<string, string> Titles = new()
+    {
+        ["/dashboard"] = "แดชบอร์ด",
+        ["/items"] = "รายการสินค้า",
+        ["/purchases"] = "ค่าใช้จ่าย / การซื้อ",
+        ["/withdrawals"] = "การเบิกของ",
+        ["/licenses"] = "License / Seat",
+        ["/subscriptions"] = "Subscription",
+        ["/reports"] = "รายงาน",
+        ["/users"] = "จัดการผู้ใช้งาน",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpdateTitle();
+        Nav.LocationChanged += OnLocationChanged;
+
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _name = user.Identity?.Name ?? "ผู้ใช้";
+            _email = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? _name;
+            var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            _roleLabel = role is null ? "" : AppRoles.DisplayName(role);
+            _initial = string.IsNullOrWhiteSpace(_name) ? "?" : _name.Trim()[..1].ToUpper();
+        }
+
+        await LoadAlertsAsync();
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        var list = new List<Alert>();
+        try
+        {
+            foreach (var i in await ItemService.GetLowStockAsync())
+                list.Add(new Alert($"สต็อกต่ำ: {i.Name}", $"คงเหลือ {i.Quantity} {i.Unit} (ต่ำสุด {i.MinQuantity})", "/items", "warning", "warning"));
+
+            foreach (var s in (await LicenseService.GetSeatUsageAsync()).Where(s => s.Total > 0 && (s.Available <= 1 || s.UsedRatio >= 0.9)))
+                list.Add(new Alert($"Seat ใกล้เต็ม: {s.Name}", $"ใช้ไป {s.Used}/{s.Total}", "/licenses", "seat", "purple"));
+
+            foreach (var r in await SubscriptionService.GetUpcomingRenewalsAsync(30))
+                list.Add(new Alert($"ใกล้ครบรอบ: {r.Name}", $"ครบรอบใน {r.DaysUntil} วัน ({r.Amount:N0} ฿)", "/subscriptions", "clock", "info"));
+        }
+        catch { /* ไม่ให้ topbar ล้มถ้า query มีปัญหา */ }
+        _alerts = list;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateTitle();
+        CloseAll();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateTitle()
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
+        _title = Titles.FirstOrDefault(t => path.StartsWith(t.Key)).Value ?? "ElevenX";
+    }
+
+    private void ToggleNotif() { _showNotif = !_showNotif; _showProfile = false; }
+    private void ToggleProfile() { _showProfile = !_showProfile; _showNotif = false; }
+    private void CloseAll() { _showNotif = false; _showProfile = false; }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

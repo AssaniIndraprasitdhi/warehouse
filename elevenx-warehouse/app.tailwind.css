@@ -1,0 +1,440 @@
+@import "tailwindcss";
+
+/* สแกนหา class ที่ใช้งานจริงจากไฟล์ Blazor */
+@source "./Components/**/*.{razor,html,cs}";
+@source "./Program.cs";
+
+/* safelist: สีสถานะที่อาจถูกเลือกแบบ dynamic (กราฟ/progress/badge) */
+@source inline("{bg,text,border}-{success,warning,info,purple,danger,neutral,accent}");
+@source inline("bg-{success,warning,info,purple,danger,neutral,accent}/{10,15,20,30}");
+@source inline("border-{success,warning,info,purple,danger,neutral,accent}/{20,30,40}");
+
+/* ================= Design tokens (ElevenX light / teal theme) ================= */
+@theme {
+  --font-sans: "Kanit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: #F3F4F6;        /* พื้นหลังหลัก เทาอ่อน */
+  --color-surface: #FFFFFF;   /* การ์ด/พื้นผิว ขาว */
+  --color-surface-2: #EEF1F4; /* พื้นผิวยกระดับ / hover เทาอ่อน */
+  --color-border: #E3E7EB;    /* เส้นขอบ เทาอ่อน */
+  --color-text: #1A2330;      /* ตัวอักษรหลัก เกือบดำ */
+  --color-muted: #64748B;     /* ตัวอักษรรอง เทา */
+
+  --color-accent: #138A72;    /* สี accent เดียว — เขียวเทอร์ควอยซ์ (ไม่ไล่เฉด) */
+  --color-accent-hover: #0E6E5A; /* accent เข้มขึ้นสำหรับ hover */
+
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-info: #2563EB;
+  --color-purple: #7C3AED;
+  --color-danger: #DC2626;
+  --color-neutral: #64748B;
+
+  --radius-xl: 0.9rem;
+}
+
+/* ================= Base ================= */
+@layer base {
+  html, body {
+    height: 100%;
+  }
+  /* ย่อ scale ทั้งระบบให้กระชับขึ้น (ค่า rem ทุกอย่างเล็กลงตามสัดส่วน) */
+  html { font-size: 14px; }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    margin: 0;
+  }
+  h1, h2, h3, h4 { @apply font-medium; }
+
+  /* scrollbar โทน navy */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-surface-2) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--color-surface-2); border-radius: 9999px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  a { @apply text-accent; text-decoration: none; }
+
+  /* Blazor error toast (แสดงเมื่อ circuit error) */
+  #blazor-error-ui {
+    @apply hidden fixed bottom-0 inset-x-0 z-[60] bg-danger text-white px-5 py-3 text-sm;
+    box-shadow: 0 -2px 14px rgba(0,0,0,.35);
+  }
+  #blazor-error-ui .reload { @apply text-white underline ml-2; }
+  #blazor-error-ui .dismiss { @apply cursor-pointer float-right text-lg leading-none; }
+
+  /* override input ฟอร์มของ Blazor ให้เข้าธีม */
+  .valid.modified:not([type=checkbox]) { outline: 1px solid var(--color-success); }
+  .invalid { outline: 1px solid var(--color-danger); }
+  .validation-message { @apply text-danger text-xs mt-1; }
+}
+
+/* ================= Components ================= */
+@layer components {
+  /* ---- App shell ---- */
+  .app-shell { @apply flex h-screen overflow-hidden bg-bg; }
+  .app-main  { @apply flex-1 flex flex-col min-w-0; }
+  .app-content { @apply flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5; }
+
+  /* ---- Sidebar (มือถือ = drawer เลื่อนออก, ≥lg = ติดถาวร) ---- */
+  .sidebar {
+    @apply fixed inset-y-0 left-0 z-50 w-60 max-w-[82vw] bg-surface border-r border-border flex flex-col;
+    transform: translateX(-100%);
+    transition: transform .28s cubic-bezier(.16,.84,.44,1);
+  }
+  .sidebar.is-open { transform: translateX(0); box-shadow: 0 24px 60px -24px rgba(0,0,0,.45); }
+  .sidebar-backdrop { @apply fixed inset-0 z-40 bg-black/40 lg:hidden; }
+  @media (min-width: 1024px) {
+    .sidebar { position: static; transform: none; width: 15rem; max-width: none; z-index: auto; box-shadow: none; }
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-muted text-sm font-normal
+           transition-colors hover:bg-surface-2 hover:text-text;
+  }
+  .nav-item-active { @apply bg-accent text-white hover:bg-accent hover:text-white; }
+  .nav-item .nav-icon { @apply w-5 h-5 shrink-0; }
+
+  /* ---- Topbar ---- */
+  .topbar { @apply h-16 shrink-0 bg-surface border-b border-border flex items-center justify-between px-5 gap-4; }
+  .icon-btn { @apply relative grid place-items-center w-9 h-9 rounded-lg text-muted hover:bg-surface-2 hover:text-text transition-colors; }
+  .icon-badge { @apply absolute -top-1 -right-1 min-w-4 h-4 px-1 grid place-items-center text-[10px] font-medium rounded-full bg-danger text-white; }
+
+  /* ---- Cards ---- */
+  .card { @apply bg-surface border border-border rounded-xl shadow-sm; }
+  .card-pad { @apply p-5; }
+  .card-header { @apply flex items-center justify-between px-5 py-4 border-b border-border; }
+  .card-title { @apply text-base font-medium text-text; }
+
+  .stat-card { @apply bg-surface border border-border rounded-xl shadow-sm p-5 flex flex-col gap-2; }
+  .stat-label { @apply text-xs text-muted; }
+  .stat-value { @apply text-2xl font-semibold text-text leading-tight; }
+  .stat-icon { @apply grid place-items-center w-10 h-10 rounded-lg shrink-0; }
+
+  /* ---- Buttons ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-normal
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none cursor-pointer
+           border border-transparent whitespace-nowrap;
+  }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs rounded-md gap-1.5; }
+  .btn-primary { @apply bg-accent text-white hover:bg-accent-hover; }
+  .btn-secondary { @apply bg-surface-2 text-text hover:bg-border border-border; }
+  .btn-ghost { @apply text-muted hover:bg-surface-2 hover:text-text; }
+  .btn-danger { @apply bg-danger text-white hover:bg-red-700; }
+  .btn-success { @apply bg-green-700 text-white hover:bg-green-800; }
+  .btn-outline { @apply border-border text-text hover:bg-surface-2; }
+
+  /* ---- Badges ---- */
+  .badge { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-normal border leading-none whitespace-nowrap; }
+  /* พื้น tint อ่อน + ตัวอักษรเฉดเข้ม (อ่านชัดบนพื้นสว่าง, ผ่าน WCAG AA) */
+  .badge-success { @apply bg-success/15 text-green-800 border-success/30; }
+  .badge-warning { @apply bg-warning/15 text-amber-800 border-warning/30; }
+  .badge-info { @apply bg-info/15 text-blue-700 border-info/30; }
+  .badge-purple { @apply bg-purple/15 text-violet-700 border-purple/30; }
+  .badge-danger { @apply bg-danger/15 text-red-700 border-danger/30; }
+  .badge-neutral { @apply bg-neutral/15 text-muted border-neutral/30; }
+  .badge-accent { @apply bg-accent/15 text-accent-hover border-accent/30; }
+
+  /* ---- Forms ---- */
+  .form-label { @apply block text-xs text-muted mb-1.5; }
+  .input, .select, .textarea {
+    @apply w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text
+           placeholder:text-muted/60 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40
+           transition-colors;
+  }
+  .select { @apply pr-8; }
+  .field-hint { @apply text-[11px] text-muted mt-1; }
+
+  /* ---- Tables ---- */
+  .data-table { @apply w-full text-sm border-collapse; }
+  .data-table thead th {
+    @apply text-left text-xs font-medium text-muted uppercase tracking-wide px-4 py-3
+           border-b border-border bg-surface-2/40 whitespace-nowrap;
+  }
+  .data-table tbody td { @apply px-4 py-3 border-b border-border/60 text-text align-middle; }
+  .data-table tbody tr { @apply transition-colors hover:bg-surface-2/40; }
+  .data-table tbody tr:last-child td { @apply border-b-0; }
+
+  /* ---- Filter / action bar ---- */
+  .toolbar { @apply flex flex-wrap items-center gap-3 justify-between; }
+  .toolbar-filters { @apply flex flex-wrap items-center gap-2; }
+  .toolbar-actions { @apply flex flex-wrap items-center gap-2; }
+
+  /* ---- Legend ---- */
+  .legend { @apply flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted; }
+  .legend-item { @apply inline-flex items-center gap-1.5; }
+  .legend-dot { @apply w-2.5 h-2.5 rounded-sm shrink-0; }
+
+  /* ---- Misc ---- */
+  .page-title { @apply text-xl font-semibold text-text; }
+  .breadcrumb { @apply text-xs text-muted; }
+  .breadcrumb-current { @apply text-text; }
+  .divider { @apply border-t border-border; }
+  .empty-state { @apply text-center text-muted py-12 text-sm; }
+  .kpi-trend-up { @apply text-green-700; }
+  .kpi-trend-down { @apply text-red-700; }
+}
+
+/* ================= Utilities ================= */
+@layer utilities {
+  .no-gradient { background-image: none !important; }
+
+  /* spinner */
+  .spinner {
+    width: 1.15rem; height: 1.15rem;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 9999px;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  .spinner-lg { width: 2.5rem; height: 2.5rem; border-width: 3px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* skeleton */
+  .skeleton { @apply bg-surface-2/60 rounded-md; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .modal-backdrop { @apply fixed inset-0 z-40 bg-black/50 backdrop-blur-sm; }
+  .modal-panel { @apply fixed inset-0 z-50 grid place-items-center p-4 overflow-y-auto; }
+}
+
+/* ============================================================= */
+/* =====================  Toast (มุมขวาบน)  ==================== */
+/* ============================================================= */
+.toast-host {
+  position: fixed; top: 1rem; right: 1rem; z-index: 80;
+  display: flex; flex-direction: column; gap: .65rem;
+  width: min(360px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto; position: relative; overflow: hidden;
+  display: flex; align-items: flex-start; gap: .7rem;
+  padding: .8rem .9rem; border-radius: .85rem;
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 16px 34px -14px rgba(15,45,39,.32), 0 4px 12px -6px rgba(15,45,39,.14);
+  animation: toast-in .34s cubic-bezier(.16,.84,.44,1);
+}
+.toast--leave { animation: toast-out .22s ease forwards; }
+@keyframes toast-in  { from { opacity: 0; transform: translateX(28px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to   { opacity: 0; transform: translateX(28px) scale(.96); } }
+
+.toast-icon { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 9999px; flex: none; margin-top: 1px; }
+.toast-icon svg { width: 1rem; height: 1rem; }
+.toast-content { flex: 1; min-width: 0; }
+.toast-title { font-weight: 600; font-size: .875rem; line-height: 1.25; }
+.toast-message { font-size: .82rem; color: var(--color-muted); line-height: 1.4; word-break: break-word; }
+.toast-title + .toast-message { margin-top: .1rem; }
+.toast-close { flex: none; color: var(--color-muted); width: 1.4rem; height: 1.4rem; display: grid; place-items: center; border-radius: .4rem; transition: color .15s, background-color .15s; }
+.toast-close:hover { color: var(--color-text); background: var(--color-surface-2); }
+.toast-close svg { width: .85rem; height: .85rem; }
+
+/* แถบนับเวลาถอยหลังด้านล่าง */
+.toast-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; transform-origin: left;
+  animation-name: toast-bar-shrink; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes toast-bar-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* สีตามชนิด: ขอบซ้าย + ไอคอน + แถบ */
+.toast-success { border-left: 3px solid var(--color-success); }
+.toast-success .toast-icon { background: color-mix(in oklab, var(--color-success) 15%, transparent); color: var(--color-success); }
+.toast-success .toast-bar  { background: var(--color-success); }
+.toast-error { border-left: 3px solid var(--color-danger); }
+.toast-error .toast-icon { background: color-mix(in oklab, var(--color-danger) 15%, transparent); color: var(--color-danger); }
+.toast-error .toast-bar  { background: var(--color-danger); }
+.toast-warning { border-left: 3px solid var(--color-warning); }
+.toast-warning .toast-icon { background: color-mix(in oklab, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+.toast-warning .toast-bar  { background: var(--color-warning); }
+.toast-info { border-left: 3px solid var(--color-accent); }
+.toast-info .toast-icon { background: color-mix(in oklab, var(--color-accent) 15%, transparent); color: var(--color-accent); }
+.toast-info .toast-bar  { background: var(--color-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none !important; }
+  .toast--leave { animation: none !important; }
+  .toast-bar { animation: none !important; display: none; }
+}
+
+/* ============================================================= */
+/* ===============  Login — ฉาก 3D + แอนิเมชัน  ================= */
+/* ============================================================= */
+
+/* ตัวแปร parallax (เซ็ตโดย JS: elevenx.initLoginScene) — สืบทอดสู่ลูกทั้งหมด */
+.login-root { position: relative; min-height: 100vh; overflow: hidden; --mx: 0; --my: 0; }
+
+/* ---- พื้นหลัง Aurora + blob ลอย ---- */
+.login-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.login-grid-overlay {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(19,138,114,.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(19,138,114,.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 75%);
+}
+.blob { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .5; will-change: transform; }
+.blob-1 { width: 40rem; height: 40rem; left: -12rem; top: -14rem; background: radial-gradient(circle, #2bc6a3, #0e6e5a); animation: blob-drift 19s ease-in-out infinite; }
+.blob-2 { width: 32rem; height: 32rem; right: -10rem; top: 20%; background: radial-gradient(circle, #16a085, #0b5e4e); animation: blob-drift 23s ease-in-out infinite reverse; }
+.blob-3 { width: 28rem; height: 28rem; left: 40%; bottom: -12rem; background: radial-gradient(circle, #43d6b5, #138a72); opacity: .35; animation: blob-drift 27s ease-in-out infinite; }
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(4rem, 3rem) scale(1.08); }
+  66% { transform: translate(-3rem, 2rem) scale(.94); }
+}
+
+/* ---- แผงซ้าย (hero) ไล่เฉดเทอร์ควอยซ์ ---- */
+.login-hero {
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 15% 10%, rgba(67,214,181,.35), transparent 45%),
+    radial-gradient(120% 120% at 85% 90%, rgba(11,94,78,.55), transparent 50%),
+    linear-gradient(135deg, #0b5e4e 0%, #138a72 48%, #0e6e5a 100%);
+}
+.login-hero::after { /* เส้น sheen เฉียงบาง ๆ */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.06) 50%, transparent 60%);
+}
+
+/* ---- เวที 3D ---- */
+.login-stage { perspective: 1100px; perspective-origin: 50% 45%; }
+.login-scene {
+  position: relative; width: 320px; height: 320px;
+  transform-style: preserve-3d;
+  transform: rotateY(calc(var(--mx) * 18deg)) rotateX(calc(var(--my) * -18deg));
+  transition: transform .25s ease-out;
+}
+
+/* วงโคจรเรืองแสง */
+.orbit-ring {
+  position: absolute; inset: 0; margin: auto; border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,.18);
+  transform-style: preserve-3d;
+}
+.orbit-ring--1 { width: 300px; height: 300px; top:0;bottom:0;left:0;right:0; transform: rotateX(72deg) rotateZ(0); animation: ring-spin 18s linear infinite; }
+.orbit-ring--2 { width: 230px; height: 230px; top:0;bottom:0;left:0;right:0; border-color: rgba(255,255,255,.12); transform: rotateX(72deg); animation: ring-spin 12s linear infinite reverse; }
+@keyframes ring-spin { to { transform: rotateX(72deg) rotateZ(360deg); } }
+
+/* ---- ลูกบาศก์แก้วหมุน ---- */
+.cube-pos { position: absolute; inset: 0; margin: auto; width: 132px; height: 132px; transform-style: preserve-3d; }
+.cube3d {
+  position: absolute; inset: 0; transform-style: preserve-3d;
+  animation: cube-rot 16s linear infinite;
+  filter: drop-shadow(0 24px 40px rgba(3,40,33,.45));
+}
+.cube3d__f {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border-radius: 20px; border: 1px solid rgba(255,255,255,.28);
+  background: linear-gradient(140deg, rgba(255,255,255,.28), rgba(255,255,255,.05));
+  backdrop-filter: blur(3px);
+  color: #fff; font-weight: 700; font-size: 1.7rem; letter-spacing: .04em;
+  box-shadow: inset 0 1px 14px rgba(255,255,255,.22), inset 0 -10px 24px rgba(3,40,33,.18);
+}
+.cube3d__f--front  { transform: translateZ(66px); }
+.cube3d__f--back   { transform: rotateY(180deg) translateZ(66px); }
+.cube3d__f--right  { transform: rotateY(90deg)  translateZ(66px); }
+.cube3d__f--left   { transform: rotateY(-90deg) translateZ(66px); }
+.cube3d__f--top    { transform: rotateX(90deg)  translateZ(66px); }
+.cube3d__f--bottom { transform: rotateX(-90deg) translateZ(66px); }
+/* หน้าที่มีชื่อระบบ — ลดขนาดให้ "ElevenX" พอดี + เงาให้อ่านชัดบนกระจก */
+.cube3d__f--front, .cube3d__f--back {
+  font-size: 1.1rem; letter-spacing: -.01em; font-weight: 700;
+  text-shadow: 0 1px 8px rgba(3, 40, 33, .55);
+}
+@keyframes cube-rot {
+  0%   { transform: rotateX(-22deg) rotateY(0deg); }
+  100% { transform: rotateX(-22deg) rotateY(360deg); }
+}
+
+/* ---- การ์ดแก้วลอย ---- */
+.float-chip {
+  position: absolute; padding: .75rem .9rem; border-radius: 16px; color: #fff;
+  background: linear-gradient(140deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
+  border: 1px solid rgba(255,255,255,.3); backdrop-filter: blur(8px);
+  box-shadow: 0 18px 40px rgba(3,40,33,.35);
+  will-change: transform;
+}
+.float-chip--a { left: -36px; top: 22px; width: 140px; transform: translateZ(90px); animation: chip-float-a 7s ease-in-out infinite; }
+.float-chip--b { right: -42px; bottom: 34px; transform: translateZ(60px); animation: chip-float-b 9s ease-in-out infinite; }
+.chip-bar { margin-top: .5rem; height: 5px; border-radius: 9999px; background: rgba(255,255,255,.25); overflow: hidden; }
+.chip-bar > span { display: block; height: 100%; border-radius: 9999px; background: #fff; }
+@keyframes chip-float-a { 0%,100% { transform: translateZ(90px) translateY(0); } 50% { transform: translateZ(90px) translateY(-14px); } }
+@keyframes chip-float-b { 0%,100% { transform: translateZ(60px) translateY(0); } 50% { transform: translateZ(60px) translateY(12px); } }
+
+/* ติ๊กถูกฟีเจอร์ */
+.feat-tick { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 9999px; background: rgba(255,255,255,.16); color: #fff; flex: none; }
+
+/* ---- การ์ดฟอร์มแก้ว + เอียง 3D ตามเมาส์ ---- */
+.login-card {
+  position: relative; border-radius: 1.5rem; padding: 2rem;
+  background: color-mix(in oklab, #ffffff 78%, transparent);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 30px 60px -25px rgba(15,45,39,.35), 0 8px 24px -12px rgba(15,45,39,.15);
+  backdrop-filter: blur(16px);
+  transform-style: preserve-3d;
+  transform: perspective(1300px) rotateY(calc(var(--mx) * 5deg)) rotateX(calc(var(--my) * -5deg));
+  transition: transform .25s ease-out;
+}
+@media (min-width: 640px) { .login-card { padding: 2.5rem; } }
+.login-card .pop { transform: translateZ(28px); }
+
+/* ---- ฟิลด์ที่มีไอคอนนำหน้า ---- */
+.field-wrap { position: relative; }
+.field-icon { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); color: var(--color-muted); pointer-events: none; }
+.field-icon svg { width: 18px; height: 18px; }
+.field-input { padding-left: 2.5rem; height: 2.85rem; }
+.field-input--pw { padding-right: 2.75rem; }
+.field-eye { position: absolute; right: .35rem; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: .55rem; color: var(--color-muted); transition: color .15s, background-color .15s; }
+.field-eye:hover { color: var(--color-text); background: var(--color-surface-2); }
+.field-eye svg { width: 18px; height: 18px; }
+
+/* ---- ปุ่ม CTA หลัก พร้อม sheen ---- */
+.login-submit {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center; gap: .55rem;
+  width: 100%; height: 3rem; border-radius: .85rem;
+  font-size: .95rem; font-weight: 600; letter-spacing: .01em;
+  color: #fff; cursor: pointer; user-select: none;
+  /* gradient ไหลลื่นต่อเนื่อง (ขยาย size แล้วเลื่อนตำแหน่ง) */
+  background: linear-gradient(110deg, #18b89a 0%, #138a72 38%, #0e6e5a 62%, #18b89a 100%);
+  background-size: 220% 100%;
+  box-shadow: 0 10px 22px -10px rgba(19,138,114,.6), inset 0 1px 0 rgba(255,255,255,.18);
+  transition: transform .3s cubic-bezier(.16,.84,.44,1), box-shadow .35s ease;
+  animation: login-flow 7s ease-in-out infinite;
+}
+@keyframes login-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.login-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 38px -12px rgba(19,138,114,.85),
+              0 0 0 4px rgba(19,138,114,.13),
+              inset 0 1px 0 rgba(255,255,255,.28);
+}
+.login-submit:active { transform: translateY(0) scale(.985); transition-duration: .08s; }
+.login-submit:disabled { opacity: .75; cursor: not-allowed; transform: none; animation-play-state: paused; }
+.login-arrow { transition: transform .3s cubic-bezier(.16,.84,.44,1); }
+.login-submit:hover .login-arrow { transform: translateX(4px); }
+.spinner-light { border-color: rgba(255,255,255,.45); border-top-color: #fff; }
+
+/* แก้ลำดับ cascade: .spinner (display:inline-block) ทับ .hidden ทำให้ spinner โผล่ตลอด
+   — กฎนี้อยู่นอก @layer จึงชนะเสมอ ใช้ได้ทั้งแอป */
+.spinner.hidden { display: none; }
+
+/* h1 ถูก FocusOnNavigate โฟกัสอัตโนมัติ — ซ่อนกรอบ outline บนหัวข้อ (ไม่ใช่ปุ่ม) */
+.login-card h1:focus, .login-card h1:focus-visible { outline: none; }
+
+/* ---- แอนิเมชันปรากฏตัว ---- */
+.rise { opacity: 0; animation: rise-in .7s cubic-bezier(.16,.84,.44,1) forwards; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---- เคารพ prefers-reduced-motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .blob, .cube3d, .orbit-ring, .float-chip, .login-hero::after, .login-submit { animation: none !important; }
+  .login-scene, .login-card { transform: none !important; transition: none !important; }
+  .rise { opacity: 1 !important; animation: none !important; }
+}
+

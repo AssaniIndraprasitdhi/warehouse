@@ -1,0 +1,42 @@
+@inject IExportService Export
+@inject IJSRuntime JS
+
+<button class="btn btn-secondary btn-sm" @onclick="DoExcel" disabled="@_busy" title="ส่งออก Excel">
+    <Icon Name="excel" Class="w-4 h-4 text-green-700" /> Excel
+</button>
+<button class="btn btn-secondary btn-sm" @onclick="DoPdf" disabled="@_busy" title="ส่งออก PDF">
+    <Icon Name="pdf" Class="w-4 h-4 text-danger" /> PDF
+</button>
+
+@code {
+    [Parameter, EditorRequired] public Func<ExportTable>? TableFactory { get; set; }
+    [Parameter] public string FileName { get; set; } = "elevenx-export";
+
+    private bool _busy;
+
+    private async Task DoExcel()
+    {
+        if (TableFactory is null) return;
+        _busy = true;
+        try
+        {
+            var bytes = Export.ToExcel(TableFactory());
+            await JS.InvokeVoidAsync("elevenx.downloadFile", $"{FileName}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(bytes));
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DoPdf()
+    {
+        if (TableFactory is null) return;
+        _busy = true;
+        try
+        {
+            var bytes = Export.ToPdf(TableFactory());
+            await JS.InvokeVoidAsync("elevenx.downloadFile", $"{FileName}.pdf",
+                "application/pdf", Convert.ToBase64String(bytes));
+        }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,292 @@
+@page "/users"
+@attribute [Authorize(Roles = "ADMIN")]
+@inject IUserService UserService
+@inject ToastService Toasts
+
+<PageTitle>จัดการผู้ใช้งาน • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-56" placeholder="ค้นหาชื่อ / อีเมล..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <select class="select" @bind="_roleFilter">
+                <option value="">ทุก Role</option>
+                @foreach (var r in AppRoles.All)
+                {
+                    <option value="@r">@AppRoles.DisplayName(r)</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <button class="btn btn-primary" @onclick="OpenCreate"><Icon Name="user-plus" Class="w-4 h-4" /> เพิ่มผู้ใช้</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_msg))
+    {
+        <AlertBanner Type="success" Message="@_msg" OnClose="() => _msg = null" />
+    }
+    @if (!string.IsNullOrEmpty(_pageErr))
+    {
+        <AlertBanner Type="danger" Message="@_pageErr" OnClose="() => _pageErr = null" />
+    }
+
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ไม่พบผู้ใช้งาน</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ผู้ใช้</th>
+                            <th>Role</th>
+                            <th>สถานะ</th>
+                            <th>สร้างเมื่อ</th>
+                            <th class="text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in Filtered)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-8 h-8 rounded-full bg-accent grid place-items-center text-white text-sm font-medium shrink-0">@Initial(u)</span>
+                                        <div class="min-w-0">
+                                            <div class="text-text font-medium">@u.FullName</div>
+                                            <div class="text-xs text-muted">@u.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="@UiColors.Badge(RoleColor(u.Role))">@AppRoles.DisplayName(u.Role)</span></td>
+                                <td>
+                                    @if (u.IsLockedOut)
+                                    {
+                                        <span class="badge badge-danger">ปิดการใช้งาน</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-success">ใช้งานได้</span>
+                                    }
+                                </td>
+                                <td class="text-muted whitespace-nowrap">@u.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                <td class="text-right">
+                                    <div class="inline-flex gap-1">
+                                        <button class="icon-btn" title="แก้ไข" @onclick="() => OpenEdit(u)"><Icon Name="edit" Class="w-4 h-4" /></button>
+                                        <button class="icon-btn" title="รีเซ็ตรหัสผ่าน" @onclick="() => OpenReset(u)"><Icon Name="key-round" Class="w-4 h-4" /></button>
+                                        <button class="icon-btn" title="@(u.IsLockedOut ? "เปิดใช้งาน" : "ปิดการใช้งาน")" @onclick="() => ToggleActive(u)">
+                                            <Icon Name="@(u.IsLockedOut ? "check" : "ban")" Class="w-4 h-4" />
+                                        </button>
+                                        <button class="icon-btn hover:text-danger" title="ลบ" @onclick="() => AskDelete(u)"><Icon Name="trash" Class="w-4 h-4" /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    <div class="text-xs text-muted">ทั้งหมด @Filtered.Count ผู้ใช้</div>
+</div>
+
+<!-- Create / Edit modal -->
+<Modal Show="_showForm" Title="@(_isNew ? "เพิ่มผู้ใช้งาน" : "แก้ไขผู้ใช้งาน")" Size="md" OnClose="() => _showForm = false">
+    <ChildContent>
+        @if (!string.IsNullOrEmpty(_formErr))
+        {
+            <div class="mb-4"><AlertBanner Type="danger" Message="@_formErr" /></div>
+        }
+        <div class="space-y-4">
+            <div>
+                <label class="form-label">ชื่อ-สกุล *</label>
+                <input class="input" @bind="_fName" placeholder="เช่น สมชาย ใจดี" />
+            </div>
+            <div>
+                <label class="form-label">อีเมล *</label>
+                <input type="email" class="input" @bind="_fEmail" disabled="@(!_isNew)" placeholder="name@elevenx.local" />
+            </div>
+            @if (_isNew)
+            {
+                <div>
+                    <label class="form-label">รหัสผ่าน *</label>
+                    <input type="text" class="input" @bind="_fPassword" placeholder="อย่างน้อย 6 ตัว มีตัวพิมพ์เล็ก/ใหญ่/เลข/อักขระพิเศษ" />
+                </div>
+            }
+            <div>
+                <label class="form-label">Role *</label>
+                <select class="select" @bind="_fRole">
+                    @foreach (var r in AppRoles.All)
+                    {
+                        <option value="@r">@AppRoles.DisplayName(r) (@r)</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showForm = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="SaveForm" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            บันทึก
+        </button>
+    </Footer>
+</Modal>
+
+<!-- Reset password modal -->
+<Modal Show="_showReset" Title="รีเซ็ตรหัสผ่าน" Size="sm" OnClose="() => _showReset = false">
+    <ChildContent>
+        @if (!string.IsNullOrEmpty(_formErr))
+        {
+            <div class="mb-4"><AlertBanner Type="danger" Message="@_formErr" /></div>
+        }
+        <p class="text-sm text-muted mb-3">ตั้งรหัสผ่านใหม่ให้ <span class="text-text">@_target?.FullName</span></p>
+        <input type="text" class="input" @bind="_fPassword" placeholder="รหัสผ่านใหม่" />
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-secondary" @onclick="() => _showReset = false">ยกเลิก</button>
+        <button class="btn btn-primary" @onclick="SaveReset" disabled="@_saving">
+            @if (_saving)
+            {
+                <span class="spinner"></span>
+            }
+            รีเซ็ตรหัสผ่าน
+        </button>
+    </Footer>
+</Modal>
+
+<ConfirmDialog Show="_confirmDelete" Danger="true" Busy="_deleting"
+               Title="ลบผู้ใช้งาน"
+               Message="@($"ต้องการลบผู้ใช้ \"{_target?.FullName}\" ใช่หรือไม่?")"
+               ConfirmText="ลบผู้ใช้" OnConfirm="DoDelete" OnCancel="() => _confirmDelete = false" />
+
+@code {
+    private List<UserRow> _users = [];
+    private bool _loading = true;
+    private string _search = "", _roleFilter = "";
+    private string? _msg, _pageErr;
+
+    private bool _showForm, _showReset, _isNew, _saving;
+    private string? _formErr;
+    private UserRow? _target;
+    private string _fName = "", _fEmail = "", _fPassword = "", _fRole = AppRoles.Staff;
+
+    private bool _confirmDelete, _deleting;
+
+    private IReadOnlyList<UserRow> Filtered => _users.Where(u =>
+        (string.IsNullOrEmpty(_roleFilter) || u.Role == _roleFilter) &&
+        (string.IsNullOrWhiteSpace(_search)
+            || u.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || u.Email.Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _users = await UserService.GetUsersAsync();
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        _isNew = true; _formErr = null;
+        _fName = ""; _fEmail = ""; _fPassword = ""; _fRole = AppRoles.Staff;
+        _showForm = true;
+    }
+
+    private void OpenEdit(UserRow u)
+    {
+        _isNew = false; _formErr = null; _target = u;
+        _fName = u.FullName; _fEmail = u.Email; _fRole = u.Role == "-" ? AppRoles.Staff : u.Role;
+        _showForm = true;
+    }
+
+    private void OpenReset(UserRow u)
+    {
+        _formErr = null; _target = u; _fPassword = "";
+        _showReset = true;
+    }
+
+    private async Task SaveForm()
+    {
+        _formErr = null;
+        if (string.IsNullOrWhiteSpace(_fName)) { _formErr = "กรุณาระบุชื่อ"; return; }
+        if (_isNew && (string.IsNullOrWhiteSpace(_fEmail) || string.IsNullOrWhiteSpace(_fPassword)))
+        { _formErr = "กรุณากรอกอีเมลและรหัสผ่าน"; return; }
+
+        _saving = true;
+        OperationResult r = _isNew
+            ? await UserService.CreateUserAsync(_fEmail, _fName, _fPassword, _fRole)
+            : await UserService.UpdateUserAsync(_target!.Id, _fName, _fRole);
+        _saving = false;
+
+        if (r.Success)
+        {
+            _showForm = false;
+            await LoadAsync();
+            Toasts.Success(_isNew ? $"เพิ่มผู้ใช้ “{_fName}” แล้ว" : $"แก้ไขผู้ใช้ “{_fName}” แล้ว");
+        }
+        else _formErr = r.Error;
+    }
+
+    private async Task SaveReset()
+    {
+        _formErr = null;
+        if (string.IsNullOrWhiteSpace(_fPassword)) { _formErr = "กรุณากรอกรหัสผ่านใหม่"; return; }
+
+        _saving = true;
+        var r = await UserService.ResetPasswordAsync(_target!.Id, _fPassword);
+        _saving = false;
+
+        if (r.Success) { _showReset = false; Toasts.Success("รีเซ็ตรหัสผ่านเรียบร้อย"); }
+        else _formErr = r.Error;
+    }
+
+    private async Task ToggleActive(UserRow u)
+    {
+        _msg = _pageErr = null;
+        var r = await UserService.SetActiveAsync(u.Id, u.IsLockedOut); // ถ้าถูกล็อกอยู่ → เปิดใช้งาน
+        if (r.Success) { await LoadAsync(); Toasts.Success("อัปเดตสถานะผู้ใช้แล้ว"); }
+        else _pageErr = r.Error;
+    }
+
+    private void AskDelete(UserRow u) { _target = u; _confirmDelete = true; }
+
+    private async Task DoDelete()
+    {
+        if (_target is null) return;
+        _deleting = true;
+        var r = await UserService.DeleteUserAsync(_target.Id);
+        _deleting = false;
+        _confirmDelete = false;
+        if (r.Success) { await LoadAsync(); Toasts.Success("ลบผู้ใช้เรียบร้อย"); }
+        else _pageErr = r.Error;
+    }
+
+    private static string Initial(UserRow u) => string.IsNullOrWhiteSpace(u.FullName) ? "?" : u.FullName.Trim()[..1].ToUpper();
+
+    private static string RoleColor(string role) => role switch
+    {
+        AppRoles.Admin => "purple",
+        AppRoles.Purchaser => "info",
+        AppRoles.Staff => "success",
+        AppRoles.Viewer => "neutral",
+        _ => "neutral",
+    };
+}

@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node / Tailwind
+node_modules/
+
+# Local config (มีไฟล์ .example ให้แทน)
+appsettings.json
+appsettings.Development.json
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# OS
+.DS_Store

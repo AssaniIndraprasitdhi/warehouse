@@ -1,0 +1,236 @@
+@page "/subscriptions"
+@attribute [Authorize]
+@inject ISubscriptionService SubscriptionService
+@inject CurrentUserAccessor CurrentUser
+@inject ToastService Toasts
+
+<PageTitle>Subscription • ElevenX</PageTitle>
+
+<div class="space-y-5">
+    <!-- Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard Label="ค่า subscription รวมต่อเดือน" Value="@FormatMoney(SubscriptionService.MonthlyTotal(_subs))" IconName="refresh" Color="accent" Sub="รวมทุก cycle (normalize เป็นรายเดือน)" />
+        <StatCard Label="กำลังใช้งาน" Value="@_subs.Count(s => s.Status == SubscriptionStatus.Active).ToString()" IconName="check" Color="success" Sub="@($"ทั้งหมด {_subs.Count} รายการ")" />
+        <StatCard Label="ใกล้ครบรอบใน 30 วัน" Value="@UpcomingCount.ToString()" IconName="clock" Color="warning" />
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-filters">
+            <div class="relative">
+                <Icon Name="search" Class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input class="input pl-9 w-56" placeholder="ค้นหา subscription..." @bind="_search" @bind:event="oninput" />
+            </div>
+            <select class="select" @bind="_statusFilter">
+                <option value="">ทุกสถานะ</option>
+                <option value="@SubscriptionStatus.Active">ใช้งานอยู่</option>
+                <option value="@SubscriptionStatus.Cancelled">ยกเลิกแล้ว</option>
+                <option value="@SubscriptionStatus.Expired">หมดอายุ</option>
+            </select>
+        </div>
+        <div class="toolbar-actions">
+            <ExportButtons FileName="elevenx-subscriptions" TableFactory="BuildExport" />
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_msg))
+    {
+        <AlertBanner Type="success" Message="@_msg" OnClose="() => _msg = null" />
+    }
+    @if (!string.IsNullOrEmpty(_err))
+    {
+        <AlertBanner Type="danger" Message="@_err" OnClose="() => _err = null" />
+    }
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        @if (_loading)
+        {
+            <Spinner />
+        }
+        else if (Filtered.Count == 0)
+        {
+            <div class="empty-state">ไม่พบ subscription</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>รายการ</th>
+                            <th class="text-right">ค่ารอบ</th>
+                            <th>รอบบิล</th>
+                            <th>รอบบิลถัดไป</th>
+                            <th class="text-right">เทียบ/เดือน</th>
+                            <th>สถานะ</th>
+                            <th class="text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Filtered)
+                        {
+                            var days = s.NextBillingDate.HasValue ? (int)Math.Ceiling((s.NextBillingDate.Value.Date - DateTime.Today).TotalDays) : (int?)null;
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-2">
+                                        <ItemTypeBadge Type="s.Type" />
+                                        <span class="text-text">@s.Name</span>
+                                    </div>
+                                </td>
+                                <td class="text-right font-medium">@FormatMoney(s.RecurringAmount ?? 0)</td>
+                                <td class="text-muted">@(s.BillingCycle.HasValue ? DisplayLabels.Cycle(s.BillingCycle.Value) : "—")</td>
+                                <td>
+                                    @if (s.NextBillingDate.HasValue)
+                                    {
+                                        <div class="whitespace-nowrap">@s.NextBillingDate.Value.ToString("dd/MM/yyyy")</div>
+                                        @if (s.Status == SubscriptionStatus.Active && days is >= 0 and <= 30)
+                                        {
+                                            <span class="badge badge-warning">อีก @days วัน</span>
+                                        }
+                                        else if (s.Status == SubscriptionStatus.Active && days < 0)
+                                        {
+                                            <span class="badge badge-danger">เลยกำหนด</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="text-right text-muted">@FormatMoney(BillingMath.MonthlyEquivalent(s.RecurringAmount ?? 0, s.BillingCycle ?? BillingCycle.Monthly))</td>
+                                <td><StatusBadge Status="s.Status" /></td>
+                                <td class="text-right">
+                                    @if (_canManage)
+                                    {
+                                        <div class="inline-flex gap-1 justify-end flex-wrap">
+                                            @if (s.Status == SubscriptionStatus.Active)
+                                            {
+                                                <button class="btn btn-secondary btn-sm" disabled="@(_busyId == s.Id)" @onclick="() => RecordCharge(s)" title="บันทึกค่ารอบนี้">
+                                                    @if (_busyId == s.Id)
+                                                    {
+                                                        <span class="spinner"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <Icon Name="money" Class="w-3.5 h-3.5" />
+                                                    }
+                                                    ค่ารอบ
+                                                </button>
+                                                <button class="btn btn-ghost btn-sm hover:text-danger" @onclick="() => AskCancel(s)" title="ยกเลิก"><Icon Name="ban" Class="w-3.5 h-3.5" /></button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-secondary btn-sm" disabled="@(_busyId == s.Id)" @onclick="() => Reactivate(s)" title="ต่ออายุ"><Icon Name="play" Class="w-3.5 h-3.5" /> ต่ออายุ</button>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted text-xs">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<ConfirmDialog Show="_confirmCancel" Danger="true" Busy="_cancelling"
+               Title="ยกเลิก Subscription"
+               Message="@($"ต้องการยกเลิก \"{_cancelTarget?.Name}\" ใช่หรือไม่? ระบบจะหยุดสร้างค่ารอบถัดไป")"
+               ConfirmText="ยกเลิก subscription" OnConfirm="DoCancel" OnCancel="() => _confirmCancel = false" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Item> _subs = [];
+    private bool _loading = true, _canManage;
+    private string _search = "", _statusFilter = "";
+    private int _busyId;
+    private string? _msg, _err;
+
+    private bool _confirmCancel, _cancelling;
+    private Item? _cancelTarget;
+
+    private int UpcomingCount => _subs.Count(s => s.Status == SubscriptionStatus.Active && s.NextBillingDate.HasValue
+        && s.NextBillingDate.Value.Date <= DateTime.Today.AddDays(30) && s.NextBillingDate.Value.Date >= DateTime.Today);
+
+    private IReadOnlyList<Item> Filtered => _subs.Where(s =>
+        (string.IsNullOrEmpty(_statusFilter) || s.Status.ToString() == _statusFilter) &&
+        (string.IsNullOrWhiteSpace(_search) || s.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var u = (await AuthState).User;
+            _canManage = u.IsInRole(AppRoles.Admin) || u.IsInRole(AppRoles.Purchaser);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _subs = await SubscriptionService.GetSubscriptionsAsync();
+        _loading = false;
+    }
+
+    private async Task RecordCharge(Item s)
+    {
+        if (!_canManage) return;
+        _busyId = s.Id; _msg = _err = null;
+        var uid = await CurrentUser.GetUserIdAsync() ?? "";
+        var r = await SubscriptionService.RecordRecurringChargeAsync(s.Id, uid);
+        _busyId = 0;
+        if (r.Success) { await LoadAsync(); Toasts.Success($"บันทึกค่ารอบ “{s.Name}” และเลื่อนรอบบิลถัดไปแล้ว"); }
+        else _err = r.Error;
+    }
+
+    private async Task Reactivate(Item s)
+    {
+        if (!_canManage) return;
+        _busyId = s.Id; _msg = _err = null;
+        var r = await SubscriptionService.ReactivateAsync(s.Id);
+        _busyId = 0;
+        if (r.Success) { await LoadAsync(); Toasts.Success($"ต่ออายุ “{s.Name}” เรียบร้อย"); }
+        else _err = r.Error;
+    }
+
+    private void AskCancel(Item s) { if (!_canManage) return; _cancelTarget = s; _confirmCancel = true; }
+
+    private async Task DoCancel()
+    {
+        if (_cancelTarget is null) return;
+        _cancelling = true;
+        var r = await SubscriptionService.CancelAsync(_cancelTarget.Id);
+        _cancelling = false;
+        _confirmCancel = false;
+        if (r.Success) { await LoadAsync(); Toasts.Success($"ยกเลิก “{_cancelTarget.Name}” เรียบร้อย"); }
+        else _err = r.Error;
+    }
+
+    private string FormatMoney(decimal v) => v.ToString("#,##0.##") + " ฿";
+
+    private ExportTable BuildExport()
+    {
+        var rows = Filtered.Select(s => new[]
+        {
+            s.Name,
+            DisplayLabels.Type(s.Type),
+            (s.RecurringAmount ?? 0).ToString("#,##0.##"),
+            s.BillingCycle.HasValue ? DisplayLabels.Cycle(s.BillingCycle.Value) : "-",
+            s.NextBillingDate?.ToString("dd/MM/yyyy") ?? "-",
+            BillingMath.MonthlyEquivalent(s.RecurringAmount ?? 0, s.BillingCycle ?? BillingCycle.Monthly).ToString("#,##0.##"),
+            s.Status.HasValue ? DisplayLabels.Status(s.Status.Value) : "-",
+        }).ToList();
+        return new ExportTable("รายการ Subscription ElevenX",
+            ["รายการ", "ประเภท", "ค่ารอบ", "รอบบิล", "รอบถัดไป", "เทียบ/เดือน", "สถานะ"], rows,
+            $"รวมต่อเดือน {SubscriptionService.MonthlyTotal(_subs):#,##0.##} ฿");
+    }
+}
