@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ElevenX.Warehouse.Components;
@@ -13,6 +15,11 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// PaaS (Railway/Render/Fly) ส่งพอร์ตที่ต้อง bind มาทาง env "PORT" — รองรับให้ครบ
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 // ---------- Blazor + Razor components (Interactive Server) ----------
 builder.Services.AddRazorComponents()
@@ -40,6 +47,17 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 builder.Services.AddAuthorization();
 
+// ---------- Reverse proxy (Railway / Cloudflare) ----------
+// อ่าน X-Forwarded-Proto/For เพื่อให้ scheme เป็น https ที่ถูกต้องหลัง TLS termination
+// (กัน redirect loop, ทำให้ auth cookie Secure ทำงาน, และ Blazor ใช้ wss)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // proxy ของ PaaS/Cloudflare ใช้ IP ไม่แน่นอน — เคลียร์ allow-list เริ่มต้น
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // ---------- Database (PostgreSQL via Npgsql) ----------
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -51,6 +69,13 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+// ---------- Data Protection ----------
+// เก็บ key ring ใน DB (ผ่าน ApplicationDbContext) — กัน user หลุด login ทุกครั้งที่ redeploy
+// SetApplicationName ให้ key คงที่ข้าม instance/deploy
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<ApplicationDbContext>()
+    .SetApplicationName("ElevenX.Warehouse");
 
 // ---------- ASP.NET Core Identity + Roles ----------
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -91,6 +116,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ---------- HTTP pipeline ----------
+// ต้องมาก่อน middleware อื่น เพื่อให้ scheme/IP ถูกแก้จาก header ก่อนนำไปใช้
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
@@ -144,5 +172,8 @@ app.MapPost("/auth/logout", async (Microsoft.AspNetCore.Identity.SignInManager<A
     await signInManager.SignOutAsync();
     return Results.LocalRedirect("/login");
 }).DisableAntiforgery();
+
+// ---------- Health check (ใช้โดย Railway/Render เพื่อเช็คว่า container พร้อม) ----------
+app.MapGet("/healthz", () => Results.Ok("healthy")).AllowAnonymous();
 
 app.Run();

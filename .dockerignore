@@ -1,0 +1,24 @@
+# build artifacts
+**/bin/
+**/obj/
+**/node_modules/
+
+# vcs / ide / os
+.git/
+.github/
+.vs/
+.idea/
+*.swp
+.DS_Store
+
+# โปรเจกต์เทสต์ — ไม่ต้องเข้า image
+ElevenX.Warehouse.Tests/
+
+# config ที่มี secret จริง (gitignore อยู่แล้ว) — กันไม่ให้ creds dev หลุดเข้า image
+**/appsettings.json
+**/appsettings.Development.json
+
+# docs / docker meta
+*.md
+Dockerfile
+.dockerignore
