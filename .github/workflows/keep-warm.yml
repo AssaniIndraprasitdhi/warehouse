@@ -1,0 +1,22 @@
+name: keep-warm
+
+# ping /healthz เพื่อกัน Render free หลับ (หลับเองเมื่อ idle ~15 นาที)
+# ตั้งช่วงเวลาทำงานไทย จ.-ศ. 08:00-18:00 (ICT) = UTC 01:00-11:00 เพื่อประหยัดชั่วโมงฟรี (750 ชม./เดือน)
+on:
+  schedule:
+    - cron: '*/10 1-11 * * 1-5'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          URL="${{ vars.APP_URL }}"
+          if [ -z "$URL" ]; then
+            echo "ยังไม่ได้ตั้ง repo variable APP_URL — ข้าม (ตั้งหลัง deploy เสร็จ)"
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$URL/healthz" || echo 000)
+          echo "GET $URL/healthz -> $code"

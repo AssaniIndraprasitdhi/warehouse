@@ -1,0 +1,38 @@
+name: db-backup
+
+# สำรองฐานข้อมูล Neon รายวัน → เข้ารหัส (AES256) → เก็บเป็น artifact 90 วัน
+# ปลอดภัยแม้ repo เป็น public เพราะ dump ถูกเข้ารหัสด้วย passphrase (เก็บเป็น secret)
+on:
+  schedule:
+    - cron: '0 19 * * *'   # ทุกวัน 02:00 ICT (UTC 19:00)
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump + encrypt Neon database
+        env:
+          # ใช้ connection string แบบ DIRECT ของ Neon (host ไม่มี -pooler) รูปแบบ URI
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "ยังไม่ได้ตั้ง secret NEON_DATABASE_URL / BACKUP_PASSPHRASE — ข้าม (ตั้งหลัง Neon เสร็จ)"
+            exit 0
+          fi
+          # ใช้ pg_dump จาก image postgres:17 เพื่อให้เวอร์ชันตรง/ใหม่กว่า server
+          docker run --rm -e PGCONNECT_TIMEOUT=30 postgres:17 \
+            pg_dump "$DATABASE_URL" --no-owner --no-privileges \
+            | gzip \
+            | gpg --batch --yes --symmetric --cipher-algo AES256 \
+                  --passphrase "$BACKUP_PASSPHRASE" -o backup.sql.gz.gpg
+          ls -lh backup.sql.gz.gpg
+
+      - name: Upload encrypted backup
+        if: ${{ hashFiles('backup.sql.gz.gpg') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup.sql.gz.gpg
+          retention-days: 90

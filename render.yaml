@@ -1,0 +1,23 @@
+# Render Blueprint — ElevenX Warehouse (.NET 10 Blazor Server)
+# สร้าง web service จาก Dockerfile เดิม. DB ใช้ Neon (ภายนอก) — ใส่ค่าใน dashboard (sync:false)
+services:
+  - type: web
+    name: elevenx-warehouse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    # region ที่ใกล้ไทยสุด — ถ้า Render แจ้งว่า free ไม่รองรับ singapore ให้ลบบรรทัดนี้ (ดีฟอลต์ oregon)
+    region: singapore
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # ใส่ค่าจริงใน Render dashboard (Environment) — ไม่เก็บลงไฟล์
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Seed__AdminPassword
+        sync: false
+      - key: Seed__AdminEmail
+        sync: false
